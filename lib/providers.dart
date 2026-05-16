@@ -4,6 +4,7 @@ import 'models/match_result.dart';
 import 'models/property.dart';
 import 'models/contract_analysis.dart';
 import 'models/valuation_report.dart';
+import 'repositories/property_repository.dart';
 import 'services/contract_analysis_service.dart';
 import 'services/matching_service.dart';
 import 'services/valuation_service.dart';
@@ -27,9 +28,18 @@ final matchingServiceProvider = Provider<MatchingService>(
   (ref) => MatchingService(),
 );
 
-/// Carga todas las propiedades del seed JSON.
+/// Repositorio de propiedades.
+/// MVP: InMemoryPropertyRepository (seed JSON).
+/// Phase 2: swap a DriftPropertyRepository (offline-first + Supabase sync)
+/// — ver `lib/repositories/property_repository.dart` y `lib/ARCHITECTURE.md`.
+/// Este cambio NO toca services, solo el binding del provider.
+final propertyRepositoryProvider = Provider<PropertyRepository>(
+  (ref) => InMemoryPropertyRepository(),
+);
+
+/// Carga todas las propiedades vía repository.
 final propertiesProvider = FutureProvider<List<Property>>(
-  (ref) => ref.read(matchingServiceProvider).loadProperties(),
+  (ref) => ref.read(propertyRepositoryProvider).getAll(),
 );
 
 /// Resultados de matching ordenados descending por compatibility.
