@@ -132,59 +132,74 @@ class _RoleBanner extends StatelessWidget {
     final accent = isAgent ? HitoTokens.teal : HitoTokens.navy;
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: HitoTokens.paper,
         borderRadius: BorderRadius.circular(HitoTokens.rMd),
-        border: Border(
-          left: BorderSide(color: accent, width: 3),
-          top: BorderSide(color: HitoTokens.border),
-          right: BorderSide(color: HitoTokens.border),
-          bottom: BorderSide(color: HitoTokens.border),
-        ),
+        border: Border.all(color: HitoTokens.border),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-            child: Text(
-              isAgent ? 'M' : 'J',
-              style: GoogleFonts.geist(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
+          // Left accent stripe (3px) — usando Container interno en vez de
+          // BorderSide para evitar conflicto con borderRadius del parent.
+          Container(width: 3, height: 60, color: accent),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isAgent
-                      ? 'Bienvenida, María · Agente Pro'
-                      : 'Hola, Juan · Familia García-López',
-                  style: GoogleFonts.geist(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: HitoTokens.ink1,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      isAgent ? 'M' : 'J',
+                      style: GoogleFonts.geist(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  isAgent
-                      ? '12 listings activos · 3 leads esta semana · 1 contrato pendiente'
-                      : 'Buscando casa para tu familia · presupuesto hasta \$220k USD',
-                  style: GoogleFonts.geist(
-                    fontSize: 11,
-                    color: HitoTokens.ink3,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isAgent
+                              ? 'Bienvenida, María · Agente Pro'
+                              : 'Hola, Juan · Familia García-López',
+                          style: GoogleFonts.geist(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: HitoTokens.ink1,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isAgent
+                              ? '12 listings · 3 leads · 1 contrato pendiente'
+                              : 'Casa familia · hasta \$220k USD · Recoleta',
+                          style: GoogleFonts.geist(
+                            fontSize: 11,
+                            color: HitoTokens.ink3,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
