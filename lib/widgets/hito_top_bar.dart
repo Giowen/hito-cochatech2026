@@ -108,16 +108,14 @@ class _ViewToggle extends ConsumerWidget {
         children: [
           _ToggleSide(
             avatar: 'M',
-            label: 'Vista María',
-            sublabel: '(agente)',
+            label: 'María',
             active: agent,
             onTap: () =>
                 ref.read(viewModeProvider.notifier).set(ViewMode.agent),
           ),
           _ToggleSide(
             avatar: 'J',
-            label: 'Vista Juan',
-            sublabel: '(cliente)',
+            label: 'Juan',
             active: !agent,
             onTap: () =>
                 ref.read(viewModeProvider.notifier).set(ViewMode.client),
@@ -131,14 +129,12 @@ class _ViewToggle extends ConsumerWidget {
 class _ToggleSide extends StatelessWidget {
   final String avatar;
   final String label;
-  final String sublabel;
   final bool active;
   final VoidCallback onTap;
 
   const _ToggleSide({
     required this.avatar,
     required this.label,
-    required this.sublabel,
     required this.active,
     required this.onTap,
   });
@@ -193,14 +189,6 @@ class _ToggleSide extends StatelessWidget {
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: active ? HitoTokens.ink1 : HitoTokens.ink3,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                sublabel,
-                style: GoogleFonts.geist(
-                  fontSize: 11,
-                  color: active ? HitoTokens.ink3 : HitoTokens.ink4,
                 ),
               ),
             ],
