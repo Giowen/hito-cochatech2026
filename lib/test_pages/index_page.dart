@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'map_test.dart';
 import 'voice_test.dart';
 import 'groq_test.dart';
-import 'heatmap_test.dart';
 
 /// Index para los 4 tests de stack validation (Phase 0 del roadmap).
 /// Cada card abre una página dedicada para validar manualmente.
@@ -47,12 +46,6 @@ class StackValidationIndex extends StatelessWidget {
             title: 'Test 3: Groq streaming',
             subtitle: 'Validar Llama 3.3 first token <2s',
             destination: const GroqTestPage(),
-          ),
-          _TestCard(
-            icon: Icons.gradient,
-            title: 'Test 4: flutter_map_heatmap',
-            subtitle: 'Validar overlay sin glitches',
-            destination: const HeatmapTestPage(),
           ),
         ],
       ),
