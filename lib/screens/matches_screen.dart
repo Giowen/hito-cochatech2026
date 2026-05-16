@@ -5,6 +5,7 @@ import '../models/match_result.dart';
 import '../providers.dart';
 import '../widgets/properties_map.dart';
 import '../widgets/property_card.dart';
+import '../widgets/voice_input_sheet.dart';
 
 /// MatchesScreen — pantalla principal con layout side-by-side (lista + mapa).
 /// Sprint 1.3 (lista) + Sprint 2.1 (mapa).
@@ -18,6 +19,20 @@ class MatchesScreen extends ConsumerWidget {
         title: const Text('Hito · Matches'),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.mic),
+            tooltip: 'Voice input — nuevo perfil',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (_) => const VoiceInputSheet(),
+              );
+            },
+          ),
+        ],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
