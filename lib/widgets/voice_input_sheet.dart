@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:record/record.dart';
 import '../models/client_profile.dart';
 import '../providers.dart';
+import '../theme.dart';
 
-/// VoiceInputSheet — modal sheet para input de perfil del cliente.
-/// Default demo path: hardcoded result tras simular procesamiento.
-/// Real path: Whisper + Llama extraction (TODO Sprint 2.2 advanced).
+/// VoiceInputSheet — modal sheet para input de perfil del cliente (Acto 1 wow #1).
+///
+/// Demo path: simula procesamiento 1.2s y retorna ClientProfile.demoJuan
+/// (familia 2 hijos pequeños, \$220k USD máx, Recoleta, anticrético).
+/// Real path: Whisper API + LLM extraction (Phase 2, ver ARCHITECTURE.md).
+///
+/// TODO R2: en producción, el audio capturado se sube a Cloudflare R2 vía
+/// signed URL → trigger Whisper transcription server-side.
 class VoiceInputSheet extends ConsumerStatefulWidget {
   const VoiceInputSheet({super.key});
 
@@ -52,7 +59,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     } catch (e) {
       setState(() {
         _state = _SheetState.error;
-        _error = 'Error: $e';
+        _error = 'Error iniciando grabación: $e';
       });
     }
   }
@@ -62,7 +69,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
       await _audioRecorder.stop();
       setState(() => _state = _SheetState.processing);
 
-      // Demo path: simulate Whisper + LLM extraction
+      // Demo path: simula Whisper + LLM extraction. Determinístico, cero red.
       await Future.delayed(const Duration(milliseconds: 1200));
       setState(() {
         _transcription = ClientProfile.demoJuan.voiceInputTranscript!;
@@ -106,9 +113,9 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          20,
+          24,
           16,
-          20,
+          24,
           MediaQuery.of(context).viewInsets.bottom + 24,
         ),
         child: Column(
@@ -120,18 +127,28 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
                 Expanded(
                   child: Text(
                     '¿Qué casa estás buscando?',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: GoogleFonts.instrumentSerif(
+                      fontSize: 24,
+                      color: HitoTokens.ink1,
+                      height: 1.1,
+                    ),
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close_rounded, color: HitoTokens.ink3),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 4),
+            Text(
+              'Hablale a María como si fuera tu agente.',
+              style: GoogleFonts.geist(
+                fontSize: 13,
+                color: HitoTokens.ink3,
+              ),
+            ),
+            const SizedBox(height: 28),
             Center(
               child: _MicButton(
                 state: _state,
@@ -147,11 +164,17 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
                 },
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Center(
               child: Text(
                 _statusText(),
-                style: Theme.of(context).textTheme.bodyLarge,
+                style: GoogleFonts.geist(
+                  fontSize: 13,
+                  color: _state == _SheetState.error
+                      ? HitoTokens.danger
+                      : HitoTokens.ink2,
+                  height: 1.5,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -160,7 +183,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
               child: Column(
                 children: [
                   if (_transcription.isNotEmpty) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
                     _TranscriptionBubble(text: _transcription),
                   ],
                   if (_extractedProfile != null) ...[
@@ -168,22 +191,22 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
                     _ProfilePreview(profile: _extractedProfile!),
                   ],
                   if (_state == _SheetState.ready) ...[
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 22),
                     FilledButton.icon(
                       onPressed: _applyProfile,
-                      icon: const Icon(Icons.search),
-                      label: const Text('Buscar propiedades'),
+                      icon: const Icon(Icons.search_rounded, size: 18),
+                      label: const Text('Buscar propiedades compatibles'),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
                   ] else if (_state == _SheetState.idle ||
                       _state == _SheetState.error) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     TextButton.icon(
                       onPressed: _skipToDemoProfile,
-                      icon: const Icon(Icons.skip_next, size: 18),
-                      label: const Text('Saltar voz, usar perfil de Juan'),
+                      icon: const Icon(Icons.skip_next_rounded, size: 16),
+                      label: const Text('Saltar voz · usar perfil demo'),
                     ),
                   ],
                 ],
@@ -198,15 +221,15 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   String _statusText() {
     switch (_state) {
       case _SheetState.idle:
-        return 'Toca el botón y di lo que buscas\n(presupuesto, zona, modalidad, características)';
+        return 'Toca el botón y di lo que buscas\n(presupuesto, zona, modalidad, características).';
       case _SheetState.recording:
-        return '🔴 Escuchando... habla con claridad,\ntoca de nuevo para detener';
+        return '🔴  Escuchando... habla con claridad,\ntoca de nuevo para detener.';
       case _SheetState.processing:
-        return 'Whisper transcribiendo y Llama 3.3\nestructurando perfil...';
+        return 'Whisper transcribiendo · Llama 3.3 estructurando perfil...';
       case _SheetState.ready:
-        return '✓ Perfil listo. Revisa y confirma.';
+        return '✓  Perfil listo. Revisa y confirma.';
       case _SheetState.error:
-        return '❌ ${_error ?? "Error desconocido"}';
+        return _error ?? 'Error desconocido';
     }
   }
 }
@@ -219,26 +242,25 @@ class _MicButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     Color color;
     IconData icon;
 
     switch (state) {
       case _SheetState.recording:
-        color = Colors.red.shade600;
+        color = HitoTokens.danger;
         icon = Icons.stop_rounded;
       case _SheetState.processing:
-        color = scheme.primary;
-        icon = Icons.hourglass_top;
+        color = HitoTokens.teal;
+        icon = Icons.hourglass_top_rounded;
       case _SheetState.ready:
-        color = Colors.green.shade600;
-        icon = Icons.refresh;
+        color = HitoTokens.success;
+        icon = Icons.refresh_rounded;
       case _SheetState.error:
-        color = Colors.orange.shade700;
-        icon = Icons.mic;
+        color = HitoTokens.warning;
+        icon = Icons.mic_rounded;
       case _SheetState.idle:
-        color = scheme.primary;
-        icon = Icons.mic;
+        color = HitoTokens.teal;
+        icon = Icons.mic_rounded;
     }
 
     return Material(
@@ -255,14 +277,14 @@ class _MicButton extends StatelessWidget {
           alignment: Alignment.center,
           child: state == _SheetState.processing
               ? const SizedBox(
-                  width: 48,
-                  height: 48,
+                  width: 44,
+                  height: 44,
                   child: CircularProgressIndicator(
                     color: Colors.white,
-                    strokeWidth: 4,
+                    strokeWidth: 3.5,
                   ),
                 )
-              : Icon(icon, color: Colors.white, size: 52),
+              : Icon(icon, color: Colors.white, size: 48),
         ),
       ),
     );
@@ -276,26 +298,30 @@ class _TranscriptionBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(10),
+        color: HitoTokens.paper2,
+        borderRadius: BorderRadius.circular(HitoTokens.rLg),
+        border: Border.all(color: HitoTokens.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            Icons.format_quote,
+            Icons.format_quote_rounded,
             size: 18,
-            color: Colors.grey.shade600,
+            color: HitoTokens.ink4,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontStyle: FontStyle.italic,
-                  ),
+              style: GoogleFonts.geist(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                color: HitoTokens.ink1,
+                height: 1.5,
+              ),
             ),
           ),
         ],
@@ -310,62 +336,76 @@ class _ProfilePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: scheme.primaryContainer.withAlpha(80),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: scheme.primary, width: 1.5),
+        color: HitoTokens.paper,
+        borderRadius: BorderRadius.circular(HitoTokens.rLg),
+        border: Border.all(color: HitoTokens.teal2, width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.person_pin, color: scheme.primary, size: 18),
+              Icon(Icons.person_pin_rounded, color: HitoTokens.teal, size: 18),
               const SizedBox(width: 6),
               Text(
-                'Perfil extraído',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: scheme.primary,
-                    ),
+                'Perfil estructurado por AI',
+                style: GoogleFonts.geist(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: HitoTokens.teal2,
+                  letterSpacing: 0.6,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           _row(
             context,
-            Icons.attach_money,
-            '${profile.budgetMin ~/ 1000}K - ${profile.budgetMax ~/ 1000}K Bs',
+            Icons.attach_money_rounded,
+            'Presupuesto: hasta \$${(profile.budgetMax / 1000 / 12.20).toStringAsFixed(0)}k USD',
           ),
           _row(
             context,
-            Icons.swap_horiz,
-            'Modalidad: ${profile.transactionType}',
+            Icons.swap_horiz_rounded,
+            'Modalidad: ${profile.transactionType} ${profile.requiredTags.contains('acepta_anticretico') ? "+ anticrético" : ""}',
           ),
           _row(
             context,
             Icons.bed_outlined,
-            'Mínimo ${profile.minBedrooms} dormitorios',
+            'Mínimo ${profile.minBedrooms} dormitorios · ${profile.minAreaM2}+ m²',
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            children: profile.requiredTags
-                .map(
-                  (t) => Chip(
-                    label: Text(t.replaceAll('_', ' ')),
-                    padding: EdgeInsets.zero,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                    labelStyle: const TextStyle(fontSize: 11),
-                  ),
-                )
-                .toList(),
-          ),
+          if (profile.requiredTags.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: profile.requiredTags
+                  .map(
+                    (t) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: HitoTokens.paper2,
+                        borderRadius: BorderRadius.circular(HitoTokens.rSm),
+                      ),
+                      child: Text(
+                        t.replaceAll('_', ' '),
+                        style: GoogleFonts.geist(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: HitoTokens.ink2,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
         ],
       ),
     );
@@ -376,9 +416,17 @@ class _ProfilePreview extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: Colors.grey.shade700),
+          Icon(icon, size: 14, color: HitoTokens.ink3),
           const SizedBox(width: 6),
-          Text(text, style: Theme.of(context).textTheme.bodyMedium),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.geist(
+                fontSize: 12.5,
+                color: HitoTokens.ink1,
+              ),
+            ),
+          ),
         ],
       ),
     );
