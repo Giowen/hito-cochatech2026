@@ -35,3 +35,18 @@ final matchResultsProvider = FutureProvider<List<MatchResult>>((ref) async {
   final properties = await ref.watch(propertiesProvider.future);
   return service.scoreAll(profile: profile, properties: properties);
 });
+
+/// Notifier para el property_id seleccionado actualmente (sync entre lista y mapa).
+class SelectedPropertyIdNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void select(String? id) => state = id;
+  void clear() => state = null;
+}
+
+/// Selected property id — sincroniza highlight de card en lista con marker en mapa.
+final selectedPropertyIdProvider =
+    NotifierProvider<SelectedPropertyIdNotifier, String?>(
+  SelectedPropertyIdNotifier.new,
+);

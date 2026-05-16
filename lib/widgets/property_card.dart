@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/match_result.dart';
 import '../models/property.dart';
+import '../providers.dart';
 
 /// Card visual de una propiedad con match score, precio, specs y barra de compatibility.
-class PropertyCard extends StatelessWidget {
+/// Sincronizada con selectedPropertyIdProvider: highlight cuando este card está seleccionado.
+class PropertyCard extends ConsumerWidget {
   final Property property;
   final MatchResult match;
-  final VoidCallback? onTap;
 
   const PropertyCard({
     super.key,
     required this.property,
     required this.match,
-    this.onTap,
   });
 
   Color _bucketColor() {
@@ -27,93 +28,125 @@ class PropertyCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedId = ref.watch(selectedPropertyIdProvider);
+    final isSelected = property.id == selectedId;
     final bucketColor = _bucketColor();
     final scheme = Theme.of(context).colorScheme;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _CoverImage(
-              property: property,
-              bucketColor: bucketColor,
-              compatibility: match.compatibilityPercent,
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    property.address,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        '${(property.priceBob / 1000).toStringAsFixed(0)}K Bs',
-                        style:
-                            Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: scheme.primary,
-                                ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          '· ~\$${(property.priceUsdParalelo / 1000).toStringAsFixed(0)}K USD paralelo',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.grey.shade600,
-                              ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      _spec(context, Icons.bed_outlined, '${property.bedrooms}'),
-                      const SizedBox(width: 16),
-                      _spec(
-                        context,
-                        Icons.bathtub_outlined,
-                        '${property.bathrooms}',
-                      ),
-                      const SizedBox(width: 16),
-                      _spec(
-                        context,
-                        Icons.square_foot,
-                        '${property.areaM2} m²',
-                      ),
-                      const Spacer(),
-                      _ModeChip(mode: property.listingMode),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: match.compatibilityPercent / 100,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation(bucketColor),
-                      minHeight: 6,
-                    ),
-                  ),
-                ],
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isSelected ? scheme.primary : Colors.transparent,
+          width: 2.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isSelected
+                ? scheme.primary.withAlpha(40)
+                : const Color.fromRGBO(0, 0, 0, 0.06),
+            blurRadius: isSelected ? 12 : 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(10),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            ref
+                .read(selectedPropertyIdProvider.notifier)
+                .select(property.id);
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _CoverImage(
+                property: property,
+                bucketColor: bucketColor,
+                compatibility: match.compatibilityPercent,
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      property.address,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          '${(property.priceBob / 1000).toStringAsFixed(0)}K Bs',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: scheme.primary,
+                              ),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            '· \$${(property.priceUsdParalelo / 1000).toStringAsFixed(0)}K USD',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: Colors.grey.shade600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _spec(context, Icons.bed_outlined, '${property.bedrooms}'),
+                        const SizedBox(width: 14),
+                        _spec(
+                          context,
+                          Icons.bathtub_outlined,
+                          '${property.bathrooms}',
+                        ),
+                        const SizedBox(width: 14),
+                        _spec(
+                          context,
+                          Icons.square_foot,
+                          '${property.areaM2} m²',
+                        ),
+                        const Spacer(),
+                        _ModeChip(mode: property.listingMode),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: match.compatibilityPercent / 100,
+                        backgroundColor: Colors.grey.shade200,
+                        valueColor: AlwaysStoppedAnimation(bucketColor),
+                        minHeight: 6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -148,7 +181,7 @@ class _CoverImage extends StatelessWidget {
     return Stack(
       children: [
         Container(
-          height: 140,
+          height: 120,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
@@ -162,16 +195,16 @@ class _CoverImage extends StatelessWidget {
           child: Center(
             child: Icon(
               property.type == 'casa' ? Icons.home : Icons.apartment,
-              size: 64,
+              size: 56,
               color: scheme.onPrimary.withAlpha(120),
             ),
           ),
         ),
         Positioned(
-          top: 12,
-          right: 12,
+          top: 10,
+          right: 10,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: bucketColor,
               borderRadius: BorderRadius.circular(20),
@@ -188,7 +221,7 @@ class _CoverImage extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
-                fontSize: 13,
+                fontSize: 12,
               ),
             ),
           ),
@@ -205,15 +238,15 @@ class _ModeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         mode,
         style: TextStyle(
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.w500,
           color: Theme.of(context).colorScheme.onSecondaryContainer,
         ),
