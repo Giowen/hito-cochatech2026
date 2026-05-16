@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/client_profile.dart';
 import '../models/match_result.dart';
 import '../providers.dart';
+import '../widgets/match_explanation_sheet.dart';
 import '../widgets/properties_map.dart';
 import '../widgets/property_card.dart';
 import '../widgets/voice_input_sheet.dart';
@@ -14,6 +15,20 @@ class MatchesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Cuando se selecciona una propiedad (desde mapa o lista),
+    // abrir bottom sheet con AI streaming explanation.
+    ref.listen<String?>(selectedPropertyIdProvider, (prev, current) {
+      if (current == null || current == prev) return;
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => MatchExplanationSheet(propertyId: current),
+      ).whenComplete(() {
+        ref.read(selectedPropertyIdProvider.notifier).clear();
+      });
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Hito · Matches'),
