@@ -1,5 +1,8 @@
 import 'package:latlong2/latlong.dart';
 
+import '../utils/distance.dart';
+import '../utils/landmarks.dart';
+
 /// Property model — listing inmobiliario de Cochabamba.
 /// Spec en PRD §6 y hardcoded demo path en PITCH_PREP §3.
 class Property {
@@ -93,6 +96,19 @@ class Property {
   });
 
   LatLng get coords => LatLng(lat, lng);
+
+  /// Distancia Haversine en km desde esta propiedad a otra coordenada.
+  double distanceToKm(LatLng other) => haversineKm(coords, other);
+
+  /// Distancias a los landmarks principales (UMSS, UPB, UCB, Recoleta, Centro).
+  /// Devuelve `{slug: km}` con 2 decimales. Usado como contexto cuantitativo
+  /// del LLM en el prompt de scoring.
+  Map<String, double> get distancesToLandmarks {
+    return {
+      for (final l in Landmarks.matchingContext)
+        l.slug: double.parse(distanceToKm(l.coords).toStringAsFixed(2)),
+    };
+  }
 
   factory Property.fromJson(Map<String, dynamic> json) {
     return Property(

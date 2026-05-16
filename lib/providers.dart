@@ -7,6 +7,7 @@ import 'models/contract_analysis.dart';
 import 'models/valuation_report.dart';
 import 'db/hito_db.dart';
 import 'repositories/drift_cached_supabase_repository.dart';
+import 'repositories/match_cache_repository.dart';
 import 'repositories/property_repository.dart';
 import 'repositories/supabase_property_repository.dart';
 import 'services/asset_storage.dart';
@@ -28,9 +29,17 @@ final clientProfileProvider =
   ClientProfileNotifier.new,
 );
 
-/// Single instance del MatchingService.
+/// Cache layer para AI scoring decisions (`match_scoring_cache` en Supabase).
+/// Real LLM siempre escribe aquí en cada miss; segundo load = hit instant.
+final matchCacheRepositoryProvider = Provider<MatchCacheRepository>(
+  (ref) => SupabaseMatchCacheRepository(),
+);
+
+/// MatchingService — real Groq Llama 3.3 con cache. Sin hardcoded shortcuts.
 final matchingServiceProvider = Provider<MatchingService>(
-  (ref) => MatchingService(),
+  (ref) => MatchingService(
+    cache: ref.watch(matchCacheRepositoryProvider),
+  ),
 );
 
 /// Single instance del Drift database (Mobile/Desktop).

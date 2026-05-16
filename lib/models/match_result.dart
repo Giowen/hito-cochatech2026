@@ -33,7 +33,8 @@ class MatchResult {
     return MatchResult(
       propertyId: json['property_id'] as String? ?? '',
       clientProfileId: json['client_profile_id'] as String? ?? '',
-      compatibilityPercent: json['compatibility_percent'] as int,
+      compatibilityPercent:
+          (json['compatibility_percent'] as num).toInt().clamp(0, 100),
       explanation: json['explanation'] as String? ?? '',
       positiveFactors:
           (json['positive_factors'] as List? ?? []).cast<String>(),
@@ -41,6 +42,28 @@ class MatchResult {
           (json['negative_factors'] as List? ?? []).cast<String>(),
       tagsMatched: (json['tags_matched'] as List? ?? []).cast<String>(),
       tagsMissing: (json['tags_missing'] as List? ?? []).cast<String>(),
+    );
+  }
+
+  MatchResult copyWith({
+    String? propertyId,
+    String? clientProfileId,
+    int? compatibilityPercent,
+    String? explanation,
+    List<String>? positiveFactors,
+    List<String>? negativeFactors,
+    List<String>? tagsMatched,
+    List<String>? tagsMissing,
+  }) {
+    return MatchResult(
+      propertyId: propertyId ?? this.propertyId,
+      clientProfileId: clientProfileId ?? this.clientProfileId,
+      compatibilityPercent: compatibilityPercent ?? this.compatibilityPercent,
+      explanation: explanation ?? this.explanation,
+      positiveFactors: positiveFactors ?? this.positiveFactors,
+      negativeFactors: negativeFactors ?? this.negativeFactors,
+      tagsMatched: tagsMatched ?? this.tagsMatched,
+      tagsMissing: tagsMissing ?? this.tagsMissing,
     );
   }
 

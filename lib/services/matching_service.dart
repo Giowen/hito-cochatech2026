@@ -1,78 +1,202 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/services.dart' show rootBundle;
+
+import 'package:flutter/foundation.dart';
+
 import '../models/client_profile.dart';
 import '../models/match_result.dart';
 import '../models/property.dart';
+import '../repositories/match_cache_repository.dart';
+import '../utils/distance.dart';
+import '../utils/landmarks.dart';
 import 'groq_client.dart';
 
-/// MatchingService — scorea propiedades contra ClientProfile.
+/// MatchingService — scorea propiedades contra ClientProfile con Groq real.
 ///
-/// Demo path (default): usa property.compatibility (pre-computed) y property.aiNotes
-/// para garantizar reproducibilidad. Cero latencia, cero costo, cero variabilidad.
-/// Real LLM path: invoca Groq Llama 3.3 70B con prompt PRD §16.1.
+/// **No hay demo path hardcoded**. Cada score sale de Llama 3.3 70B
+/// vía Groq con cache layer en Supabase (`match_scoring_cache`).
 ///
-/// Repository hook: cuando Phase 2 (Drift+Supabase) entre, este service consume
-/// PropertyRepository en vez de rootBundle directamente — sin tocar el resto del flujo.
+/// Flow:
+///   1. `score(profile, property)` calcula `profile.contentHash`
+///   2. Lee cache: hit → retorna instant
+///   3. Miss → llama Groq con contexto (perfil + propiedad + distancias)
+///   4. Guarda resultado en cache
+///   5. Retorna
+///
+/// Si Groq falla, `_heuristicFallback()` calcula un score básico desde
+/// datos reales de la propiedad (no hardcoded), con `explanation` que
+/// indica modo degradado. UI nunca crashea.
 class MatchingService {
   final GroqClient _groqClient;
+  final MatchCacheRepository _cache;
 
-  MatchingService({GroqClient? groqClient})
-      : _groqClient = groqClient ?? GroqClient();
+  MatchingService({
+    GroqClient? groqClient,
+    MatchCacheRepository? cache,
+  })  : _groqClient = groqClient ?? GroqClient(),
+        _cache = cache ?? NoOpMatchCacheRepository();
 
-  /// Carga 12 propiedades canónicas desde assets/seed/properties.json.
-  /// TODO Phase 2: reemplazar por PropertyRepository (in-memory → Drift+Supabase sync).
-  Future<List<Property>> loadProperties() async {
-    final jsonString =
-        await rootBundle.loadString('assets/seed/properties.json');
-    final list = jsonDecode(jsonString) as List;
-    return list
-        .map((j) => Property.fromJson(j as Map<String, dynamic>))
-        .toList();
+  // ── System prompt PRD §16.1 ampliado con distancias reales ─────────────
+  static const _systemPrompt = '''
+Eres un asistente experto en bienes raíces de Cochabamba, Bolivia.
+
+Evalúa qué tan bien una propiedad coincide con las preferencias del cliente.
+
+PESOS (suma ~100):
+- Presupuesto (35%): si el precio excede el budget_max → penaliza fuerte (-30 a -50 puntos).
+- Distancia (25%): usa los km a landmarks (UMSS, UPB, UCB, Recoleta, Centro).
+  Si el cliente menciona "cerca de X" o tiene oficina en X, valora <2 km.
+- Modalidad de transacción (15%): si pide "compra" y la propiedad solo es
+  "anticretico" → -40 puntos. Si soporta múltiples modalidades coincidentes → +.
+- Bedrooms + área m² (15%): si pide 10 dormitorios y hay 4, el score debe
+  ser 25-40%, NUNCA 80%. Sé honesto.
+- Tags (10%): patio, familia_segura, cerca_recoleta, parqueo, etc.
+
+REGLAS DE HONESTIDAD:
+- Si la propiedad no cumple un requisito fundamental, el score debe bajar
+  consistentemente. Nunca infles para mostrar opciones.
+- Si excede el inventario disponible (ej. cliente pide características
+  irrealistas para Cochabamba), refleja esa realidad en `explanation`.
+
+Devuelve JSON estricto en español:
+{
+  "compatibility_percent": int 0-100,
+  "explanation": string conversacional max 60 palabras,
+  "tags_matched": [string array],
+  "tags_missing": [string array],
+  "positive_factors": [string array, máximo 3],
+  "negative_factors": [string array, máximo 3]
+}
+
+NO incluyas markdown ni texto fuera del JSON.
+''';
+
+  /// API pública. Cache check → Groq → cache write → return.
+  Future<MatchResult> score({
+    required ClientProfile profile,
+    required Property property,
+    bool useCache = true,
+  }) async {
+    final profileHash = profile.contentHash;
+
+    if (useCache) {
+      final cached = await _cache.get(
+        propertyId: property.id,
+        profileHash: profileHash,
+      );
+      if (cached != null) {
+        debugPrint(
+          '[Hito.Matching] cache HIT id=${property.id} hash=$profileHash '
+          'compat=${cached.compatibilityPercent}%',
+        );
+        return cached.copyWith(clientProfileId: profile.id);
+      }
+    }
+
+    debugPrint(
+      '[Hito.Matching] cache MISS id=${property.id} → Groq Llama 3.3',
+    );
+
+    try {
+      final result = await _scoreWithLlm(profile: profile, property: property);
+      await _cache.upsert(
+        propertyId: property.id,
+        profileHash: profileHash,
+        profileJson: profile.toJson(),
+        result: result,
+      );
+      return result;
+    } catch (e, stack) {
+      debugPrint('[Hito.Matching] Groq failed: $e\n$stack');
+      return _heuristicFallback(profile: profile, property: property);
+    }
   }
 
-  /// Score property vía LLM real (Groq Llama 3.3 70B), prompt PRD §16.1.
-  Future<MatchResult> scoreWithLlm({
+  /// Score N propiedades en paralelo, ordenadas por compatibility desc.
+  Future<List<MatchResult>> scoreAll({
+    required ClientProfile profile,
+    required List<Property> properties,
+    bool useCache = true,
+  }) async {
+    final results = await Future.wait(
+      properties.map(
+        (p) => score(profile: profile, property: p, useCache: useCache),
+      ),
+    );
+    results.sort(
+      (a, b) => b.compatibilityPercent.compareTo(a.compatibilityPercent),
+    );
+    return results;
+  }
+
+  /// Streaming token-by-token de la explicación. Usa el cache si existe
+  /// (texto real generado por LLM, "replayed" char-by-char para UX); si
+  /// no, hace streaming directo de Groq.
+  Stream<String> explainStreaming({
+    required ClientProfile profile,
+    required Property property,
+  }) async* {
+    final profileHash = profile.contentHash;
+    final cached = await _cache.get(
+      propertyId: property.id,
+      profileHash: profileHash,
+    );
+
+    if (cached != null) {
+      final text =
+          '${cached.compatibilityPercent}% compatible contigo. ${cached.explanation}';
+      for (var i = 0; i < text.length; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        yield text[i];
+      }
+      return;
+    }
+
+    // Cache miss → real Groq streaming, con contexto enriquecido.
+    final propertyContext = _buildPropertyContext(profile, property);
+    final userPrompt =
+        'Perfil cliente:\n${jsonEncode(profile.toJson())}\n\n'
+        'Propiedad:\n$propertyContext\n\n'
+        'Da en máximo 50 palabras una explicación conversacional, '
+        'empezando con "X% compatible contigo:" donde X es tu estimación.';
+
+    yield* _groqClient.chatStream(
+      messages: [
+        const {'role': 'system', 'content': _systemPromptForStreaming},
+        {'role': 'user', 'content': userPrompt},
+      ],
+    );
+  }
+
+  static const _systemPromptForStreaming = '''
+Eres un asistente inmobiliario boliviano. Explicas en español, máximo 50
+palabras, por qué una propiedad matchea con el cliente. Sé concreto,
+conversacional. Empiezas con "X% compatible contigo:" donde X es el
+porcentaje. Mencionas factores clave: distancia, presupuesto, bedrooms.
+''';
+
+  // ── Internals ───────────────────────────────────────────────────────────
+
+  Future<MatchResult> _scoreWithLlm({
     required ClientProfile profile,
     required Property property,
   }) async {
-    const systemPrompt = '''
-Eres un asistente experto en bienes raíces bolivianos. Tu trabajo es evaluar qué tan bien una propiedad coincide con las preferencias de un cliente boliviano.
-
-Factores principales:
-- Fit de presupuesto (BOB y USD paralelo).
-- Distancia a ubicación deseada (oficina, colegios).
-- Modalidad (compra, alquiler, anticretico) — si coincide o no.
-- Características: dormitorios, área, parqueo, patio, año de construcción.
-- Tags requeridos por el cliente (patio, familia_segura, cerca_recoleta, etc.).
-
-Devuelve JSON estricto:
-{
-  "compatibility_percent": int 0-100,
-  "explanation": string corta (max 60 palabras),
-  "tags_matched": [strings],
-  "tags_missing": [strings],
-  "positive_factors": [strings],
-  "negative_factors": [strings]
-}
-''';
-
     final userPrompt =
-        'Perfil del cliente: ${jsonEncode(profile.toJson())}\n'
-        'Propiedad a evaluar: ${jsonEncode(property.toJson())}';
+        'Perfil cliente:\n${jsonEncode(profile.toJson())}\n\n'
+        'Propiedad:\n${_buildPropertyContext(profile, property)}';
 
-    final response = await _groqClient.chat(
+    final raw = await _groqClient.chat(
       messages: [
-        {'role': 'system', 'content': systemPrompt},
+        const {'role': 'system', 'content': _systemPrompt},
         {'role': 'user', 'content': userPrompt},
       ],
-      temperature: 0.3,
+      temperature: 0.2,
       responseFormat: {'type': 'json_object'},
     );
 
-    final json = GroqClient.extractJson(response);
+    final json = GroqClient.extractJson(raw);
     if (json == null) {
-      throw Exception('Failed to parse JSON from Groq response: $response');
+      throw FormatException('Groq returned non-JSON: $raw');
     }
 
     return MatchResult.fromJson({
@@ -82,131 +206,107 @@ Devuelve JSON estricto:
     });
   }
 
-  /// Score property con valores hardcoded del seed — garantiza demo path.
-  /// Compatibility y aiNotes provienen del Property mismo (claude-design canonical).
-  MatchResult scoreHardcoded({
+  /// Construye el bloque de contexto de la propiedad incluyendo distancias
+  /// reales (Haversine) a landmarks principales + distancia a la ubicación
+  /// deseada del cliente. El LLM razona sobre esos números explícitos.
+  String _buildPropertyContext(ClientProfile profile, Property property) {
+    final propJson = property.toJson();
+    final landmarkDistances = property.distancesToLandmarks;
+    final distanceToDesired =
+        property.distanceToKm(profile.desiredLocation);
+
+    final landmarkLines = Landmarks.matchingContext.map((l) {
+      final km = landmarkDistances[l.slug]!;
+      return '  - ${l.displayName}: ${formatDistance(km)}';
+    }).join('\n');
+
+    return '${jsonEncode(propJson)}\n\n'
+        'Distancia a ubicación deseada del cliente: '
+        '${formatDistance(distanceToDesired)}\n'
+        'Distancias a landmarks principales:\n$landmarkLines';
+  }
+
+  /// Score de emergencia cuando Groq no responde. Usa datos REALES de la
+  /// propiedad (no hardcoded), comunica abiertamente "AI offline".
+  MatchResult _heuristicFallback({
     required ClientProfile profile,
     required Property property,
   }) {
-    final compatibility = property.compatibility ?? 30;
-    final explanation = property.aiNotes.isNotEmpty
-        ? property.aiNotes.join(' ')
-        : 'Match basado en presupuesto, ubicación y características. '
-            'Score: $compatibility%.';
-
+    var score = 50;
     final positive = <String>[];
     final negative = <String>[];
 
-    if (property.priceBob > 0 &&
-        property.priceBob >= profile.budgetMin &&
+    // Budget fit (35 puntos)
+    if (property.priceBob >= profile.budgetMin &&
         property.priceBob <= profile.budgetMax) {
+      score += 25;
       positive.add('Dentro de presupuesto');
     } else if (property.priceBob > profile.budgetMax) {
+      score -= 30;
       negative.add('Excede presupuesto');
-    } else if (property.priceBob > 0 && property.priceBob < profile.budgetMin) {
+    } else {
       positive.add('Por debajo de presupuesto');
     }
 
+    // Bedrooms fit (15 puntos)
     if (property.bedrooms >= profile.minBedrooms) {
+      score += 10;
       positive.add('${property.bedrooms} dormitorios');
     } else {
+      score -= 25;
       negative.add('Solo ${property.bedrooms} dormitorios');
     }
 
-    if (property.areaM2 >= profile.minAreaM2) {
-      positive.add('${property.areaM2} m² construidos');
-    }
-
-    if (property.parking >= 1) {
-      positive.add('${property.parking} parqueo${property.parking > 1 ? "s" : ""}');
+    // Distance to desired location (25 puntos)
+    final dKm = property.distanceToKm(profile.desiredLocation);
+    if (dKm <= profile.radiusKm) {
+      score += 15;
+      positive.add('A ${formatDistance(dKm)} de ubicación deseada');
     } else {
-      negative.add('Sin parqueo');
+      score -= ((dKm - profile.radiusKm) * 5).round().clamp(0, 25);
+      negative.add('Lejos de ubicación deseada (${formatDistance(dKm)})');
     }
 
-    // Anticrético interest match
-    if (profile.requiredTags.contains('acepta_anticretico') &&
-        !property.supportsAnticretico) {
-      negative.add('No admite anticrético');
-    } else if (profile.requiredTags.contains('acepta_anticretico') &&
-        property.supportsAnticretico) {
-      positive.add('Disponible en anticrético');
+    // Transaction type (15 puntos)
+    final supports = property.supportedTransactions.isNotEmpty
+        ? property.supportedTransactions
+        : [property.listingMode];
+    if (supports.contains(profile.transactionType)) {
+      score += 10;
+    } else {
+      score -= 20;
+      negative.add('Modalidad no coincide');
     }
+
+    // Tags (10 puntos)
+    final tagsMatched = <String>[];
+    final tagsMissing = <String>[];
+    for (final tag in profile.requiredTags) {
+      if (property.cochabambaTags.contains(tag) ||
+          (tag == 'acepta_anticretico' && property.supportsAnticretico)) {
+        tagsMatched.add(tag);
+      } else {
+        tagsMissing.add(tag);
+      }
+    }
+    if (profile.requiredTags.isNotEmpty) {
+      score += ((tagsMatched.length / profile.requiredTags.length) * 10)
+          .round();
+    }
+
+    score = score.clamp(5, 95);
 
     return MatchResult(
       propertyId: property.id,
       clientProfileId: profile.id,
-      compatibilityPercent: compatibility,
-      explanation: explanation,
-      positiveFactors: positive,
-      negativeFactors: negative,
-      tagsMatched: const [],
-      tagsMissing: const [],
-    );
-  }
-
-  /// API pública. Usa hardcoded path si property tiene compatibility pre-computed.
-  Future<MatchResult> score({
-    required ClientProfile profile,
-    required Property property,
-    bool useDemoPath = true,
-  }) async {
-    if (useDemoPath && property.compatibility != null) {
-      return scoreHardcoded(profile: profile, property: property);
-    }
-    return scoreWithLlm(profile: profile, property: property);
-  }
-
-  /// Score todas las propiedades, retorna lista ordenada por compatibility desc.
-  Future<List<MatchResult>> scoreAll({
-    required ClientProfile profile,
-    required List<Property> properties,
-    bool useDemoPath = true,
-  }) async {
-    final results = await Future.wait(
-      properties.map(
-        (p) => score(profile: profile, property: p, useDemoPath: useDemoPath),
-      ),
-    );
-    results.sort(
-      (a, b) => b.compatibilityPercent.compareTo(a.compatibilityPercent),
-    );
-    return results;
-  }
-
-  /// Streaming de explanation token-by-token para UI tipo AI-typing.
-  /// Demo path: simula streaming desde property.aiNotes (consistencia, sin red).
-  /// LLM mode: usa Groq streaming real.
-  Stream<String> explainStreaming({
-    required ClientProfile profile,
-    required Property property,
-    bool useDemoPath = true,
-  }) async* {
-    if (useDemoPath && property.aiNotes.isNotEmpty) {
-      final compat = property.compatibility ?? 0;
-      final intro = '$compat% compatible contigo. ';
-      final body = property.aiNotes.join(' ');
-      final fullText = '$intro$body';
-      // Stream char-by-char con delay 8ms — feel auténtico de LLM streaming
-      for (var i = 0; i < fullText.length; i++) {
-        await Future.delayed(const Duration(milliseconds: 8));
-        yield fullText[i];
-      }
-      return;
-    }
-
-    const systemPrompt = '''
-Eres un asistente inmobiliario boliviano. Explica en máximo 50 palabras por qué esta propiedad matchea (o no) con el cliente. Sé concreto y conversacional. Empieza con "X% compatible contigo:" donde X es el porcentaje.
-''';
-
-    final userPrompt =
-        'Cliente: ${jsonEncode(profile.toJson())}\n'
-        'Propiedad: ${jsonEncode(property.toJson())}';
-
-    yield* _groqClient.chatStream(
-      messages: [
-        {'role': 'system', 'content': systemPrompt},
-        {'role': 'user', 'content': userPrompt},
-      ],
+      compatibilityPercent: score,
+      explanation: '$score% compatible (modo offline — IA no disponible). '
+          'Score basado en presupuesto, dormitorios y distancia real a tu '
+          'ubicación deseada (${formatDistance(dKm)}).',
+      positiveFactors: positive.take(3).toList(),
+      negativeFactors: negative.take(3).toList(),
+      tagsMatched: tagsMatched,
+      tagsMissing: tagsMissing,
     );
   }
 }

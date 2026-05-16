@@ -31,6 +31,26 @@ class ClientProfile {
 
   LatLng get desiredLocation => LatLng(desiredLat, desiredLng);
 
+  /// Hash determinístico de los campos que afectan la decisión de matching.
+  /// Sirve como cache key en `match_scoring_cache`. Estable cross-platform
+  /// (Web, mobile, desktop) — usa djb2 32-bit con `& 0xFFFFFFFF` para
+  /// evitar overflow en JS (Dart Web int = 53-bit safe).
+  ///
+  /// Cambios en estos campos invalidan el cache; cambios en
+  /// `voiceInputTranscript` no (es metadata informativa).
+  String get contentHash {
+    final canonical = [
+      'b:$budgetMin-$budgetMax',
+      't:$transactionType',
+      'l:${desiredLat.toStringAsFixed(4)},${desiredLng.toStringAsFixed(4)}',
+      'r:${radiusKm.toStringAsFixed(1)}',
+      'bd:$minBedrooms',
+      'a:$minAreaM2',
+      'tags:${(List<String>.from(requiredTags)..sort()).join(",")}',
+    ].join('|');
+    return _djb2Hex64(canonical);
+  }
+
   factory ClientProfile.fromJson(Map<String, dynamic> json) {
     return ClientProfile(
       id: json['id'] as String,
@@ -86,4 +106,18 @@ class ClientProfile {
     voiceInputTranscript:
         'Busco casa para mi familia, tenemos dos hijos pequeños, presupuesto hasta doscientos veinte mil dólares, queremos tres o cuatro dormitorios y patio. La oficina queda en la Recoleta, idealmente menos de 20 minutos. También nos interesa anticrético.',
   );
+}
+
+/// djb2 64-bit como concat de dos djb2 32-bit con seeds distintos.
+/// Stable, Web-safe (`& 0xFFFFFFFF`), 16 hex chars de salida.
+String _djb2Hex64(String s) {
+  int h1 = 5381;
+  int h2 = 0x1505 ^ 0xC0FFEE;
+  for (var i = 0; i < s.length; i++) {
+    final c = s.codeUnitAt(i);
+    h1 = ((h1 * 33) ^ c) & 0xFFFFFFFF;
+    h2 = ((h2 * 31) ^ c) & 0xFFFFFFFF;
+  }
+  return h1.toRadixString(16).padLeft(8, '0') +
+      h2.toRadixString(16).padLeft(8, '0');
 }
