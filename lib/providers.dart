@@ -10,6 +10,7 @@ import 'repositories/drift_cached_supabase_repository.dart';
 import 'repositories/match_cache_repository.dart';
 import 'repositories/property_repository.dart';
 import 'repositories/supabase_property_repository.dart';
+import 'repositories/valuation_cache_repository.dart';
 import 'services/asset_storage.dart';
 import 'services/contract_analysis_service.dart';
 import 'services/matching_service.dart';
@@ -107,9 +108,19 @@ final selectedPropertyIdProvider =
   SelectedPropertyIdNotifier.new,
 );
 
-/// Single instance del ValuationService.
+/// Cache layer para valuaciones AI (`valuation_reports` en Supabase).
+/// Insert-only — cada nuevo cómputo es un row con timestamp; getLatest
+/// retorna el más reciente.
+final valuationCacheRepositoryProvider = Provider<ValuationCacheRepository>(
+  (ref) => SupabaseValuationCacheRepository(),
+);
+
+/// ValuationService — Groq Llama 3.3 con comparables live de Supabase.
+/// Sin demo path hardcoded.
 final valuationServiceProvider = Provider<ValuationService>(
-  (ref) => ValuationService(),
+  (ref) => ValuationService(
+    cache: ref.watch(valuationCacheRepositoryProvider),
+  ),
 );
 
 /// Valuación para una propiedad específica (family por propertyId).

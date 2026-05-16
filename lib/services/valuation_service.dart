@@ -1,240 +1,216 @@
+import 'dart:async';
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+
 import '../models/property.dart';
 import '../models/valuation_report.dart';
+import '../repositories/valuation_cache_repository.dart';
+import '../utils/distance.dart';
 import '../utils/tc_paralelo.dart';
 import 'groq_client.dart';
 
-/// ValuationService — valuación dinámica AI ajustada por TC paralelo.
+/// ValuationService — valuación AI dinámica con Groq Llama 3.3 70B real.
 ///
-/// Demo path: hardcoded canonical (Av. Pando $232K mid, subvalorada 7.9% vs $215K
-/// listed). Factors ponderados + 5 comparables vendidos en 90 días.
-/// LLM path: prompt PRD §16.2 con Groq Llama 3.3 70B.
+/// **No hay demo path hardcoded.** Cada valuación se computa con LLM real
+/// sobre comparables seleccionados live desde el repositorio de propiedades.
+/// Resultado cachea en `valuation_reports` (Supabase) para responses instantáneos.
 ///
-/// Repository hook: cuando Drift+Supabase entre en Phase 2, los comparables se
-/// fetchearán desde MLS+DDRR vía repository, no se hardcodearán.
+/// Flow:
+///   1. `valuate(property, allProperties)` busca cache por property_id.
+///   2. Cache HIT → retorna.
+///   3. Cache MISS → selecciona 5 comparables (mismo tipo, ranked por distancia +
+///      proximidad de precio + similitud de dormitorios) → llama Groq con
+///      target + comparables + TC paralelo → parsea JSON → arma ValuationReport
+///      con derived fields (USD, delta) → cachea → retorna.
+///
+/// Si Groq falla, lanza la excepción (la UI ya maneja AsyncError).
 class ValuationService {
   final GroqClient _groqClient;
+  final ValuationCacheRepository _cache;
 
-  ValuationService({GroqClient? groqClient})
-      : _groqClient = groqClient ?? GroqClient();
+  ValuationService({
+    GroqClient? groqClient,
+    ValuationCacheRepository? cache,
+  })  : _groqClient = groqClient ?? GroqClient(),
+        _cache = cache ?? NoOpValuationCacheRepository();
 
-  /// Demo valuations alineadas con AI_VALUATION + COMPARABLES del claude-design.
-  static const Map<String, _DemoValuation> _demoValuations = {
-    // p01 — Casa familiar Av. Pando, Cala Cala (STAR del demo)
-    'p01': _DemoValuation(
-      estimatedUsdLow: 198000,
-      estimatedUsdMid: 232000,
-      estimatedUsdHigh: 248000,
-      confidence: 0.87,
-      // p03 (Casa con jardín Ladislao Cabrera) está en listings y matchea c4
-      comparableListingIds: ['p03'],
-      comparableDetails: [
-        'A · Av. América #1842 · 265m² · 4d · \$228k · Vendida Mar 2026',
-        'B · Calle Loa #34 · 290m² · 4d · \$245k · Vendida Feb 2026',
-        'C · Av. Pando #220 · 270m² · 4d · \$219k · Vendida Ene 2026',
-        'D · Ladislao Cabrera · 285m² · 5d · \$238k · Vendida Dic 2025',
-        'E · Av. Heroínas #1502 · 250m² · 4d · \$224k · Activa 7 días',
-      ],
-      factors: [
-        '+8.2% Ubicación (Cala Cala)',
-        '+12.4% Área construida (280 m²)',
-        '+4.1% Año 2018 (relativamente nuevo)',
-        '+6.8% Lote 320 m² con patio',
-        '−3.2% Acabados estándar (no premium)',
-        '−1.9% Av. Pando — tráfico medio',
-        '+5.1% Tendencia barrio +6.4% / 12m',
-      ],
-      forAgent:
-          'Esta propiedad está \$17k USD por debajo del valor de mercado. El propietario muestra urgencia. Sugerimos no presionar precio; cerrar rápido antes de que se sume la plusvalía del barrio (+6.4%/año).',
-      forClient:
-          'Excelente oportunidad: estás comprando \$17k USD por debajo del mercado. Cala Cala sube 6.4%/año en promedio — esto es upside garantizado a 12 meses. Si tienes dudas, ofrece \$210k y consolidás el deal.',
-      reasoning:
-          'Mid de 5 comparables vendidos últimos 90 días en Cala Cala: \$230k USD. Ajustado por TC paralelo 12.20 Bs/USD. Confidence 87% (8 muestras válidas en radio 500m).',
-    ),
-    // p02 — Departamento Recoleta
-    'p02': _DemoValuation(
-      estimatedUsdLow: 165000,
-      estimatedUsdMid: 184000,
-      estimatedUsdHigh: 198000,
-      confidence: 0.81,
-      comparableListingIds: [],
-      comparableDetails: [
-        'F · Recoleta Tower piso 12 · 170m² · 3d · \$192k · Vendida Feb 2026',
-        'G · Edif. Mirador · 160m² · 3d · \$178k · Vendida Ene 2026',
-      ],
-      factors: [
-        '+6.5% Vista panorámica piso 8',
-        '+4.2% Edificio 2022 (3 años)',
-        '−2.1% Sin patio',
-      ],
-      forAgent:
-          'Precio competitivo. Mantén en \$178k, está al precio de mercado.',
-      forClient:
-          'Precio justo. Margen de negociación bajo (3-4%) — el deal está bien para ti.',
-      reasoning:
-          'Departamentos similares en Recoleta promedian \$184k USD. Confidence 81%.',
-    ),
-    // p03 — Casa con jardín Queru Queru
-    'p03': _DemoValuation(
-      estimatedUsdLow: 188000,
-      estimatedUsdMid: 205000,
-      estimatedUsdHigh: 218000,
-      confidence: 0.84,
-      comparableListingIds: ['p11'],
-      comparableDetails: [
-        'H · Av. Lanza · 235m² · 4d · \$201k · Vendida Mar 2026',
-        'I · Mariscal Sucre #45 · 245m² · 4d · \$210k · Vendida Feb 2026',
-      ],
-      factors: [
-        '+5.4% Calle sin salida (tranquilo)',
-        '+3.8% Lote 380 m² (sobre área de zona)',
-        '−2.0% Año 2015 (no nuevo)',
-      ],
-      forAgent: 'Al precio. Justifica los \$195k con la calle privada y patio amplio.',
-      forClient: 'Subvalorado ~5%. Margen para negociar \$5-10k abajo.',
-      reasoning: 'Queru Queru comparables \$200-210k USD. Calle sin salida añade +5%.',
-    ),
-  };
+  static const _systemPrompt = '''
+Eres un tasador inmobiliario senior en Cochabamba, Bolivia, con 20 años de
+experiencia operando en 2025-2026.
 
+CONTEXTO MACRO obligatorio:
+- TC paralelo USD/BOB ~12.20 (vs oficial 6.96 — el oficial no aplica para
+  inmobiliaria, todo se mueve en paralelo o dólares).
+- Costos de construcción al alza por inflación de insumos importados.
+- Plusvalía zonal típica anual: Cala Cala +6-8%, Recoleta +5%, Queru Queru
+  +4-5%, Sarco +3%, periferia +2-3%.
+- Año de construcción importa: <5 años premium +5%, >25 años -5% a -10%.
+
+Te entregan una propiedad target + 5 comparables del mismo tipo. Estima
+valor justo de mercado para 2026 considerando TC paralelo.
+
+Devuelve JSON estricto (sin markdown):
+{
+  "estimated_value_bob": int (valor mid del rango, en BOB),
+  "estimated_value_bob_low": int (mínimo del intervalo de confianza),
+  "estimated_value_bob_high": int (máximo del intervalo),
+  "confidence_score": float entre 0 y 1,
+  "factors": [
+    strings formateados como "+8.2% Ubicación (Cala Cala)" o
+    "-2.1% Sin patio" — máximo 6 ítems
+  ],
+  "recommendation_for_agent": string max 60 palabras, tono asesor al
+    propietario/agente sobre estrategia de precio y timing,
+  "recommendation_for_client": string max 60 palabras, tono asesor al
+    comprador sobre margen de negociación,
+  "reasoning": string max 70 palabras citando 2-3 comparables y los
+    ajustes aplicados (zona, año, área, etc.)
+}
+
+REGLAS:
+- Si el precio listado está dentro de ±5% del estimate, recomendación = "a precio".
+- Si listed > estimate por más de 5%, recomendación enfatiza sobrevalor.
+- Si listed < estimate por más de 5%, recomendación enfatiza oportunidad.
+- Los valores en BOB son enteros, sin separadores.
+- No incluyas texto fuera del JSON.
+''';
+
+  /// API pública. Cache check → Groq → cache insert → return.
   Future<ValuationReport> valuate({
     required Property property,
     required List<Property> allProperties,
-    bool useDemoPath = true,
+    bool useCache = true,
   }) async {
-    if (useDemoPath && _demoValuations.containsKey(property.id)) {
-      return _hardcodedValuation(property);
+    if (useCache) {
+      final cached = await _cache.getLatest(property.id);
+      if (cached != null) {
+        debugPrint(
+          '[Hito.Valuation] cache HIT id=${property.id} '
+          'mid=${cached.estimatedValueBob} BOB delta=${cached.deltaPercent.toStringAsFixed(1)}%',
+        );
+        return cached;
+      }
     }
-    return _llmValuation(property, allProperties);
-  }
 
-  ValuationReport _hardcodedValuation(Property property) {
-    final demo = _demoValuations[property.id]!;
-    final estimatedBob = TcParalelo.usdToBob(demo.estimatedUsdMid);
+    debugPrint(
+      '[Hito.Valuation] cache MISS id=${property.id} → Groq Llama 3.3',
+    );
+
+    final comparables = _pickComparables(property, allProperties);
+    final raw = await _groqClient.chat(
+      messages: [
+        const {'role': 'system', 'content': _systemPrompt},
+        {'role': 'user', 'content': _buildUserPrompt(property, comparables)},
+      ],
+      temperature: 0.2,
+      responseFormat: {'type': 'json_object'},
+    );
+
+    final json = GroqClient.extractJson(raw);
+    if (json == null) {
+      throw FormatException('Groq returned non-JSON valuation: $raw');
+    }
+
+    final estimatedBob =
+        (json['estimated_value_bob'] as num?)?.toInt() ?? property.priceBob;
+    final lowBob = (json['estimated_value_bob_low'] as num?)?.toInt() ??
+        (estimatedBob * 0.9).round();
+    final highBob = (json['estimated_value_bob_high'] as num?)?.toInt() ??
+        (estimatedBob * 1.1).round();
     final listedBob = property.priceBob > 0
         ? property.priceBob
         : TcParalelo.usdToBob(property.priceUsdParalelo);
     final delta = listedBob > 0
-        ? ((estimatedBob - listedBob) / listedBob) * 100
+        ? ((estimatedBob - listedBob) / listedBob) * 100.0
         : 0.0;
 
-    return ValuationReport(
+    final report = ValuationReport(
       propertyId: property.id,
       estimatedValueBob: estimatedBob,
       listedValueBob: listedBob,
       deltaPercent: delta,
-      estimatedValueUsdParalelo: demo.estimatedUsdMid,
-      usdParaleloRateUsed: TcParalelo.rate,
-      comparables: demo.comparableListingIds,
-      confidenceScore: demo.confidence,
-      recommendationForAgent: demo.forAgent,
-      recommendationForClient: demo.forClient,
-      reasoning: demo.reasoning,
-      estimatedValueUsdLow: demo.estimatedUsdLow,
-      estimatedValueUsdHigh: demo.estimatedUsdHigh,
-      factors: demo.factors,
-      comparableDetails: demo.comparableDetails,
-    );
-  }
-
-  Future<ValuationReport> _llmValuation(
-    Property property,
-    List<Property> allProperties,
-  ) async {
-    final comparables = _pickComparables(property, allProperties);
-
-    const systemPrompt = '''
-Eres un tasador inmobiliario boliviano con 20 años de experiencia en Cochabamba,
-especializado en el mercado 2025-2026 con su crisis cambiaria.
-
-Considera SIEMPRE:
-- Tipo de cambio paralelo USD/Bs (asumir 12.20 Bs por USD vs 6.96 oficial)
-- Tendencia de costos de construcción al alza
-- Inflación zonal y plusvalía del barrio
-
-Devuelve JSON estricto:
-{
-  "estimated_value_bob": int,
-  "confidence_score": float 0-1,
-  "recommendation_for_agent": string,
-  "recommendation_for_client": string,
-  "reasoning": string corto
-}
-
-Estima valor justo de mercado considerando comparables, TC paralelo, y tendencias zonales típicas de Cochabamba 2026.
-''';
-
-    final userPrompt = 'Propiedad a valuar: ${jsonEncode(property.toJson())}\n'
-        'Comparables en radio cercano: ${jsonEncode(comparables.map((p) => p.toJson()).toList())}\n'
-        'TC paralelo asumido: ${TcParalelo.rate}';
-
-    final response = await _groqClient.chat(
-      messages: [
-        {'role': 'system', 'content': systemPrompt},
-        {'role': 'user', 'content': userPrompt},
-      ],
-      temperature: 0.3,
-      responseFormat: {'type': 'json_object'},
-    );
-
-    final json = GroqClient.extractJson(response);
-    if (json == null) {
-      throw Exception('Failed to parse JSON from Groq valuation: $response');
-    }
-
-    final estimatedBob = json['estimated_value_bob'] as int;
-    final delta =
-        ((estimatedBob - property.priceBob) / property.priceBob) * 100;
-
-    return ValuationReport(
-      propertyId: property.id,
-      estimatedValueBob: estimatedBob,
-      listedValueBob: property.priceBob,
-      deltaPercent: delta,
       estimatedValueUsdParalelo: TcParalelo.bobToUsd(estimatedBob),
+      estimatedValueUsdLow: TcParalelo.bobToUsd(lowBob),
+      estimatedValueUsdHigh: TcParalelo.bobToUsd(highBob),
       usdParaleloRateUsed: TcParalelo.rate,
       comparables: comparables.map((p) => p.id).toList(),
-      confidenceScore: (json['confidence_score'] as num? ?? 0.7).toDouble(),
-      recommendationForAgent: json['recommendation_for_agent'] as String,
-      recommendationForClient: json['recommendation_for_client'] as String,
-      reasoning: json['reasoning'] as String? ?? '',
+      comparableDetails: _formatComparableDetails(comparables, property),
+      confidenceScore:
+          (json['confidence_score'] as num? ?? 0.7).toDouble().clamp(0.0, 1.0),
+      factors: ((json['factors'] as List?) ?? const []).cast<String>(),
+      recommendationForAgent:
+          (json['recommendation_for_agent'] as String? ?? '').trim(),
+      recommendationForClient:
+          (json['recommendation_for_client'] as String? ?? '').trim(),
+      reasoning: (json['reasoning'] as String? ?? '').trim(),
     );
+
+    await _cache.insert(report);
+    return report;
   }
 
-  /// Selecciona ~4 comparables del mismo tipo más cercanos en precio.
+  // ── Internals ───────────────────────────────────────────────────────────
+
+  String _buildUserPrompt(Property target, List<Property> comparables) {
+    final compsJson = comparables.map((c) {
+      return {
+        'id': c.id,
+        'address': c.address,
+        'neighborhood': c.neighborhood,
+        'price_bob': c.priceBob,
+        'price_usd_paralelo': c.priceUsdParalelo,
+        'area_m2': c.areaM2,
+        'lot_m2': c.lotM2,
+        'bedrooms': c.bedrooms,
+        'bathrooms': c.bathrooms,
+        'year_built': c.yearBuilt,
+        'distance_to_target_km':
+            double.parse(c.distanceToKm(target.coords).toStringAsFixed(2)),
+      };
+    }).toList();
+
+    return 'PROPIEDAD TARGET:\n${jsonEncode(target.toJson())}\n\n'
+        'COMPARABLES (${comparables.length} propiedades similares):\n'
+        '${jsonEncode(compsJson)}\n\n'
+        'TC paralelo asumido: ${TcParalelo.rate} BOB/USD';
+  }
+
+  /// Selecciona top-5 comparables por mismo tipo + score compuesto.
+  /// Score (menor = mejor):
+  ///   distancia_km × 0.5 + |diff_precio_M_BOB| × 0.4 + |diff_dorm| × 0.1
+  ///
+  /// Si <2 comparables del mismo tipo, expande a cualquier tipo.
   List<Property> _pickComparables(Property target, List<Property> all) {
-    final sameType = all
-        .where((p) => p.id != target.id && p.type == target.type)
-        .toList();
-    sameType.sort((a, b) =>
-        (a.priceBob - target.priceBob).abs().compareTo(
-              (b.priceBob - target.priceBob).abs(),
-            ));
-    return sameType.take(4).toList();
+    Iterable<Property> pool =
+        all.where((p) => p.id != target.id && p.type == target.type);
+    if (pool.length < 2) {
+      pool = all.where((p) => p.id != target.id);
+    }
+
+    double score(Property p) {
+      final dKm = p.distanceToKm(target.coords);
+      final priceDiffM =
+          ((p.priceBob - target.priceBob).abs() / 1000000.0);
+      final bedDiff = (p.bedrooms - target.bedrooms).abs().toDouble();
+      return dKm * 0.5 + priceDiffM * 0.4 + bedDiff * 0.1;
+    }
+
+    final sorted = pool.toList()..sort((a, b) => score(a).compareTo(score(b)));
+    return sorted.take(5).toList();
   }
-}
 
-class _DemoValuation {
-  final int estimatedUsdLow;
-  final int estimatedUsdMid;
-  final int estimatedUsdHigh;
-  final double confidence;
-  final List<String> comparableListingIds;
-  final List<String> comparableDetails;
-  final List<String> factors;
-  final String forAgent;
-  final String forClient;
-  final String reasoning;
-
-  const _DemoValuation({
-    required this.estimatedUsdLow,
-    required this.estimatedUsdMid,
-    required this.estimatedUsdHigh,
-    required this.confidence,
-    required this.comparableListingIds,
-    required this.comparableDetails,
-    required this.factors,
-    required this.forAgent,
-    required this.forClient,
-    required this.reasoning,
-  });
+  /// Pre-format comparable details para la UI (ej.:
+  /// "Av. Pando · 280m² · 4d · $215k · 0.8km").
+  List<String> _formatComparableDetails(
+    List<Property> comps,
+    Property target,
+  ) {
+    return comps.map((c) {
+      final dKm = c.distanceToKm(target.coords);
+      final addressShort = c.title ?? c.address.split(',').first;
+      return '$addressShort · ${c.areaM2}m² · ${c.bedrooms}d · '
+          '\$${c.priceUsdParalelo}k · ${formatDistance(dKm).split(' · ').first}';
+    }).toList();
+  }
 }
