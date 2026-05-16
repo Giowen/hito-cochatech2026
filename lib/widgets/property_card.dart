@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/match_result.dart';
 import '../models/property.dart';
 import '../providers.dart';
+import '../theme.dart';
 
-/// Card visual de una propiedad con match score, precio, specs y barra de compatibility.
-/// Sincronizada con selectedPropertyIdProvider: highlight cuando este card está seleccionado.
+/// PropertyCard compacta — claude-design canonical style.
+/// Round teal compat badge + small photo stub + title/specs/price + ANTICRÉTICO chip.
 class PropertyCard extends ConsumerWidget {
   final Property property;
   final MatchResult match;
@@ -16,239 +18,236 @@ class PropertyCard extends ConsumerWidget {
     required this.match,
   });
 
-  Color _bucketColor() {
-    switch (match.colorBucket) {
-      case 'green':
-        return Colors.green.shade600;
-      case 'amber':
-        return Colors.orange.shade600;
-      default:
-        return Colors.grey.shade500;
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedId = ref.watch(selectedPropertyIdProvider);
     final isSelected = property.id == selectedId;
-    final bucketColor = _bucketColor();
-    final scheme = Theme.of(context).colorScheme;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isSelected ? scheme.primary : Colors.transparent,
-          width: 2.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isSelected
-                ? scheme.primary.withAlpha(40)
-                : const Color.fromRGBO(0, 0, 0, 0.06),
-            blurRadius: isSelected ? 12 : 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
       child: Material(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(10),
-        clipBehavior: Clip.antiAlias,
+        color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            ref
-                .read(selectedPropertyIdProvider.notifier)
-                .select(property.id);
-          },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _CoverImage(
-                property: property,
-                bucketColor: bucketColor,
-                compatibility: match.compatibilityPercent,
+          onTap: () =>
+              ref.read(selectedPropertyIdProvider.notifier).select(property.id),
+          borderRadius: BorderRadius.circular(HitoTokens.rLg),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: HitoTokens.paper,
+              borderRadius: BorderRadius.circular(HitoTokens.rLg),
+              border: Border.all(
+                color: isSelected ? HitoTokens.teal : HitoTokens.border,
+                width: isSelected ? 2 : 1,
               ),
-              Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      property.address,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          '${(property.priceBob / 1000).toStringAsFixed(0)}K Bs',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: scheme.primary,
-                              ),
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            '· \$${(property.priceUsdParalelo / 1000).toStringAsFixed(0)}K USD',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: Colors.grey.shade600),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        _spec(context, Icons.bed_outlined, '${property.bedrooms}'),
-                        const SizedBox(width: 14),
-                        _spec(
-                          context,
-                          Icons.bathtub_outlined,
-                          '${property.bathrooms}',
-                        ),
-                        const SizedBox(width: 14),
-                        _spec(
-                          context,
-                          Icons.square_foot,
-                          '${property.areaM2} m²',
-                        ),
-                        const Spacer(),
-                        _ModeChip(mode: property.listingMode),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: match.compatibilityPercent / 100,
-                        backgroundColor: Colors.grey.shade200,
-                        valueColor: AlwaysStoppedAnimation(bucketColor),
-                        minHeight: 6,
+              boxShadow: isSelected
+                  ? const [
+                      BoxShadow(
+                        color: Color.fromRGBO(10, 124, 112, 0.12),
+                        blurRadius: 10,
+                        offset: Offset(0, 2),
                       ),
-                    ),
-                  ],
+                    ]
+                  : null,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _CompatBadge(score: match.compatibilityPercent),
+                const SizedBox(width: 10),
+                _PhotoStub(image: property.image, type: property.type),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _Details(property: property),
                 ),
-              ),
-            ],
+                if (property.supportsAnticretico) ...[
+                  const SizedBox(width: 8),
+                  const _AnticreticoChip(),
+                ],
+              ],
+            ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _spec(BuildContext context, IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: Colors.grey.shade700),
-        const SizedBox(width: 4),
-        Text(text, style: Theme.of(context).textTheme.bodySmall),
-      ],
     );
   }
 }
 
-class _CoverImage extends StatelessWidget {
-  final Property property;
-  final Color bucketColor;
-  final int compatibility;
-
-  const _CoverImage({
-    required this.property,
-    required this.bucketColor,
-    required this.compatibility,
-  });
+class _CompatBadge extends StatelessWidget {
+  final int score;
+  const _CompatBadge({required this.score});
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Stack(
-      children: [
-        Container(
-          height: 120,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                scheme.primaryContainer,
-                scheme.primary,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: Center(
-            child: Icon(
-              property.type == 'casa' ? Icons.home : Icons.apartment,
-              size: 56,
-              color: scheme.onPrimary.withAlpha(120),
-            ),
-          ),
+    final color = compatibilityColor(score);
+    return Container(
+      width: 46,
+      height: 46,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        '$score',
+        style: GoogleFonts.geist(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
         ),
-        Positioned(
-          top: 10,
-          right: 10,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: bucketColor,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Text(
-              '$compatibility% compatible',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _ModeChip extends StatelessWidget {
-  final String mode;
-  const _ModeChip({required this.mode});
+class _PhotoStub extends StatelessWidget {
+  final String image;
+  final String type;
+  const _PhotoStub({required this.image, required this.type});
+
+  /// 12 distinct gradients for visual differentiation
+  /// (in production, replaced by real photos from R2).
+  /// TODO R2: replace with NetworkImage from Cloudflare R2 signed URL.
+  LinearGradient _gradientFor(String id) {
+    final palettes = <List<Color>>[
+      [const Color(0xFFE7E0CF), const Color(0xFFD8CDB1)],
+      [const Color(0xFFE0E8E5), const Color(0xFFB8CFC4)],
+      [const Color(0xFFEDE3D4), const Color(0xFFD9C7AC)],
+      [const Color(0xFFDCE3EA), const Color(0xFFB7C5D5)],
+      [const Color(0xFFE5E0D5), const Color(0xFFCBC1A8)],
+      [const Color(0xFFE0DBD0), const Color(0xFFC2B89E)],
+      [const Color(0xFFE2EAE5), const Color(0xFFBACFC6)],
+      [const Color(0xFFEAE3D5), const Color(0xFFD0C2A6)],
+      [const Color(0xFFDEE5EA), const Color(0xFFB8C8D8)],
+      [const Color(0xFFE7E3D7), const Color(0xFFCBC0A8)],
+      [const Color(0xFFE0E5D9), const Color(0xFFC0CCA8)],
+      [const Color(0xFFEAE0D4), const Color(0xFFD2BFA5)],
+    ];
+    final idx = image.startsWith('gradient-')
+        ? (int.tryParse(image.substring(9)) ?? 1) - 1
+        : 0;
+    return LinearGradient(
+      colors: palettes[idx % palettes.length],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      width: 52,
+      height: 52,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(10),
+        gradient: _gradientFor(image),
+        borderRadius: BorderRadius.circular(HitoTokens.rMd),
+      ),
+      child: Icon(
+        type == 'casa' ? Icons.home_outlined : Icons.apartment_outlined,
+        size: 24,
+        color: HitoTokens.ink3,
+      ),
+    );
+  }
+}
+
+class _Details extends StatelessWidget {
+  final Property property;
+  const _Details({required this.property});
+
+  String _neighborhoodLabel() {
+    final n = property.neighborhood ?? '';
+    if (n.isEmpty) return '';
+    // Convert slug to title case
+    return n
+        .split('_')
+        .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final neighborhood = _neighborhoodLabel();
+    final usdK = property.priceUsdParalelo > 0
+        ? '\$${(property.priceUsdParalelo / 1000).toStringAsFixed(0)}k'
+        : (property.anticreticoBob != null
+            ? 'Bs ${(property.anticreticoBob! / 1000).toStringAsFixed(0)}k'
+            : '—');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          property.displayTitle,
+          style: GoogleFonts.geist(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: HitoTokens.ink1,
+            height: 1.3,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          [
+            if (neighborhood.isNotEmpty) neighborhood,
+            '${property.bedrooms}d',
+            '${property.areaM2}m²',
+          ].join(' · '),
+          style: GoogleFonts.geist(
+            fontSize: 11,
+            color: HitoTokens.ink3,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text(
+              usdK,
+              style: GoogleFonts.geist(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: HitoTokens.ink1,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              property.priceUsdParalelo > 0 ? 'USD' : '',
+              style: GoogleFonts.geist(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: HitoTokens.ink4,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AnticreticoChip extends StatelessWidget {
+  const _AnticreticoChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD7F0EA), // teal bg
+        borderRadius: BorderRadius.circular(HitoTokens.rSm),
       ),
       child: Text(
-        mode,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-          color: Theme.of(context).colorScheme.onSecondaryContainer,
+        'ANTICRÉTICO',
+        style: GoogleFonts.geist(
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.6,
+          color: HitoTokens.teal2,
         ),
       ),
     );

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import '../providers.dart';
+import '../theme.dart';
 
 /// Mapa con los 15 markers de propiedades, coloreados por compatibility.
 /// Sincronizado con selectedPropertyIdProvider: click marker → highlight + center.
@@ -112,8 +114,8 @@ class _PropertiesMapState extends ConsumerState<PropertiesMap> {
                           final isSelected = property.id == selectedId;
                           return Marker(
                             point: property.coords,
-                            width: isSelected ? 64 : 50,
-                            height: isSelected ? 64 : 50,
+                            width: isSelected ? 86 : 72,
+                            height: isSelected ? 56 : 46,
                             child: GestureDetector(
                               onTap: () {
                                 ref
@@ -123,6 +125,8 @@ class _PropertiesMapState extends ConsumerState<PropertiesMap> {
                               child: _MarkerBadge(
                                 compatibility: match.compatibilityPercent,
                                 isSelected: isSelected,
+                                isAnticretico:
+                                    property.supportsAnticretico,
                               ),
                             ),
                           );
@@ -241,49 +245,86 @@ class _ZonesToggle extends StatelessWidget {
 class _MarkerBadge extends StatelessWidget {
   final int compatibility;
   final bool isSelected;
+  final bool isAnticretico;
 
   const _MarkerBadge({
     required this.compatibility,
     required this.isSelected,
+    this.isAnticretico = false,
   });
-
-  Color _bucketColor() {
-    if (compatibility >= 80) return Colors.green.shade600;
-    if (compatibility >= 50) return Colors.orange.shade600;
-    return Colors.grey.shade500;
-  }
 
   @override
   Widget build(BuildContext context) {
-    final color = _bucketColor();
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white,
-          width: isSelected ? 4 : 3,
+    final color = compatibilityColor(compatibility);
+    final showStar = compatibility >= 85;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.symmetric(
+            horizontal: isSelected ? 10 : 8,
+            vertical: isSelected ? 5 : 4,
+          ),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(HitoTokens.r2xl),
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: Color.fromRGBO(13, 27, 42, 0.25),
+                blurRadius: 5,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showStar) ...[
+                Icon(
+                  Icons.star_rounded,
+                  size: isSelected ? 14 : 12,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 3),
+              ],
+              Text(
+                '$compatibility',
+                style: GoogleFonts.geist(
+                  fontSize: isSelected ? 14 : 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  height: 1.0,
+                ),
+              ),
+            ],
+          ),
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(0, 0, 0, 0.3),
-            blurRadius: 6,
-            offset: Offset(0, 2),
+        if (isAnticretico) ...[
+          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: HitoTokens.paper,
+              borderRadius: BorderRadius.circular(HitoTokens.rXs),
+              border: Border.all(color: HitoTokens.borderStrong),
+            ),
+            child: Text(
+              'ANTI',
+              style: GoogleFonts.geist(
+                fontSize: 8,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                color: HitoTokens.teal2,
+              ),
+            ),
           ),
         ],
-      ),
-      child: Center(
-        child: Text(
-          '$compatibility',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: isSelected ? 18 : 14,
-          ),
-        ),
-      ),
+      ],
     );
   }
 }

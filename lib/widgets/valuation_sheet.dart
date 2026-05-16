@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/property.dart';
 import '../models/valuation_report.dart';
 import '../providers.dart';
 import '../screens/contract_analysis_screen.dart';
+import '../theme.dart';
 import '../utils/tc_paralelo.dart';
 
-/// ValuationSheet — Sprint 3.2 (UI) + 3.3 (vista dual María/Juan).
-/// Trigger desde MatchExplanationSheet botón "Ver valuación".
-/// Cuando se abre, activa activeValuationPropertyIdProvider para que el
-/// mapa highlightee los 4 comparables como pins grises.
+/// ValuationSheet — claude-design canonical layout.
+/// Low/mid/high range + confidence + 7 factors ponderados + 5 comparables + recommendation
+/// según viewMode global (María/Juan toggle del top bar).
 class ValuationSheet extends ConsumerStatefulWidget {
   final String propertyId;
   const ValuationSheet({super.key, required this.propertyId});
@@ -19,8 +20,6 @@ class ValuationSheet extends ConsumerStatefulWidget {
 }
 
 class _ValuationSheetState extends ConsumerState<ValuationSheet> {
-  bool _agentView = false;
-
   @override
   void initState() {
     super.initState();
@@ -33,16 +32,10 @@ class _ValuationSheetState extends ConsumerState<ValuationSheet> {
 
   @override
   void dispose() {
-    // Clear on dismiss so map stops highlighting comparables
     Future.microtask(() {
-      if (!mounted) {
-        // ignore: invalid_use_of_protected_member
-      }
       try {
         ref.read(activeValuationPropertyIdProvider.notifier).set(null);
-      } catch (_) {
-        // ref may be invalidated; safe to ignore on dispose
-      }
+      } catch (_) {}
     });
     super.dispose();
   }
@@ -51,26 +44,27 @@ class _ValuationSheetState extends ConsumerState<ValuationSheet> {
   Widget build(BuildContext context) {
     final valuationAsync = ref.watch(valuationProvider(widget.propertyId));
     final propertiesAsync = ref.watch(propertiesProvider);
+    final viewMode = ref.watch(viewModeProvider);
 
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         child: valuationAsync.when(
           loading: () => const SizedBox(
-            height: 200,
+            height: 220,
             child: Center(child: CircularProgressIndicator()),
           ),
           error: (e, _) => SizedBox(
-            height: 200,
+            height: 220,
             child: Center(child: Text('Error: $e')),
           ),
           data: (valuation) => propertiesAsync.when(
             loading: () => const SizedBox(
-              height: 200,
+              height: 220,
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (e, _) => SizedBox(
-              height: 200,
+              height: 220,
               child: Center(child: Text('Error: $e')),
             ),
             data: (properties) {
@@ -80,12 +74,7 @@ class _ValuationSheetState extends ConsumerState<ValuationSheet> {
               return _Body(
                 property: property,
                 valuation: valuation,
-                comparables: valuation.comparables
-                    .map((id) => propMap[id])
-                    .whereType<Property>()
-                    .toList(),
-                agentView: _agentView,
-                onViewChanged: (v) => setState(() => _agentView = v),
+                viewMode: viewMode,
               );
             },
           ),
@@ -98,151 +87,306 @@ class _ValuationSheetState extends ConsumerState<ValuationSheet> {
 class _Body extends StatelessWidget {
   final Property property;
   final ValuationReport valuation;
-  final List<Property> comparables;
-  final bool agentView;
-  final ValueChanged<bool> onViewChanged;
+  final ViewMode viewMode;
 
   const _Body({
     required this.property,
     required this.valuation,
-    required this.comparables,
-    required this.agentView,
-    required this.onViewChanged,
+    required this.viewMode,
   });
 
   Color _deltaColor() {
-    if (valuation.deltaPercent < -5) return Colors.red.shade700;
-    if (valuation.deltaPercent > 5) return Colors.green.shade700;
-    return Colors.blueGrey.shade700;
+    if (valuation.deltaPercent < -5) return HitoTokens.danger;
+    if (valuation.deltaPercent > 5) return HitoTokens.success;
+    return HitoTokens.info;
+  }
+
+  String _deltaLabel() {
+    if (valuation.deltaPercent < -5) return 'Sobrevalorada';
+    if (valuation.deltaPercent > 5) return 'Subvalorada';
+    return 'A precio';
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final deltaColor = _deltaColor();
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.calculate, color: scheme.primary, size: 24),
-            const SizedBox(width: 8),
-            Text(
-              'Valuación dinámica',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          property.address,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey.shade700,
-              ),
-        ),
-        const SizedBox(height: 16),
-        _ValueComparison(
-          estimated: valuation.estimatedValueBob,
-          estimatedUsd: valuation.estimatedValueUsdParalelo,
-          listed: valuation.listedValueBob,
-          deltaPercent: valuation.deltaPercent,
-          deltaColor: deltaColor,
-          label: valuation.label,
-        ),
-        const SizedBox(height: 14),
-        _TcParaleloPill(rate: valuation.usdParaleloRateUsed),
-        if (comparables.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          _ComparablesSection(comparables: comparables),
-        ],
-        const SizedBox(height: 18),
-        SegmentedButton<bool>(
-          segments: const [
-            ButtonSegment<bool>(
-              value: false,
-              label: Text('Para Juan'),
-              icon: Icon(Icons.person, size: 18),
-            ),
-            ButtonSegment<bool>(
-              value: true,
-              label: Text('Para María'),
-              icon: Icon(Icons.work, size: 18),
-            ),
-          ],
-          selected: {agentView},
-          onSelectionChanged: (s) => onViewChanged(s.first),
-          style: SegmentedButton.styleFrom(
-            visualDensity: VisualDensity.compact,
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _Header(property: property, confidence: valuation.confidenceScore),
+          const SizedBox(height: 18),
+          _PriceRange(
+            low: valuation.estimatedValueUsdLow ??
+                valuation.estimatedValueUsdParalelo,
+            mid: valuation.estimatedValueUsdParalelo,
+            high: valuation.estimatedValueUsdHigh ??
+                valuation.estimatedValueUsdParalelo,
+            listedUsd: property.priceUsdParalelo,
           ),
-        ),
-        const SizedBox(height: 10),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          child: Container(
-            key: ValueKey(agentView),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: scheme.primaryContainer.withAlpha(70),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: scheme.primary, width: 1.2),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 12),
+          _DeltaBadge(
+            deltaPercent: valuation.deltaPercent,
+            color: _deltaColor(),
+            label: _deltaLabel(),
+            listedUsd: property.priceUsdParalelo,
+            estimatedUsd: valuation.estimatedValueUsdParalelo,
+          ),
+          const SizedBox(height: 14),
+          _TcParaleloPill(rate: valuation.usdParaleloRateUsed),
+          if (valuation.factors.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            _SectionLabel(label: 'FACTORES PONDERADOS'),
+            const SizedBox(height: 8),
+            ...valuation.factors.map((f) => _FactorRow(text: f)),
+          ],
+          if (valuation.comparableDetails.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            _SectionLabel(
+                label:
+                    '${valuation.comparableDetails.length} COMPARABLES VENDIDOS / ACTIVOS'),
+            const SizedBox(height: 8),
+            ...valuation.comparableDetails.map((c) => _ComparableRow(text: c)),
+          ],
+          const SizedBox(height: 18),
+          _RecommendationCard(
+            viewMode: viewMode,
+            forAgent: valuation.recommendationForAgent,
+            forClient: valuation.recommendationForClient,
+          ),
+          if (valuation.reasoning.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
               children: [
-                Icon(
-                  agentView ? Icons.work : Icons.person,
-                  color: scheme.primary,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
+                Icon(Icons.info_outline,
+                    size: 14, color: HitoTokens.ink4),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    agentView
-                        ? valuation.recommendationForAgent
-                        : valuation.recommendationForClient,
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    valuation.reasoning,
+                    style: GoogleFonts.geist(
+                      fontSize: 11,
+                      color: HitoTokens.ink3,
+                      fontStyle: FontStyle.italic,
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ],
             ),
+          ],
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      ContractAnalysisScreen(propertyId: property.id),
+                ),
+              );
+            },
+            icon: const Icon(Icons.shield_outlined),
+            label: const Text(
+                'Revisar contrato anticrético con tu copiloto legal'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  final Property property;
+  final double confidence;
+  const _Header({required this.property, required this.confidence});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: HitoTokens.paper2,
+            borderRadius: BorderRadius.circular(HitoTokens.rMd),
+          ),
+          child: Icon(Icons.calculate, color: HitoTokens.teal, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Valuación dinámica',
+                style: GoogleFonts.instrumentSerif(
+                  fontSize: 22,
+                  color: HitoTokens.ink1,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                property.displayTitle,
+                style: GoogleFonts.geist(
+                  fontSize: 12,
+                  color: HitoTokens.ink3,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
-        if (valuation.reasoning.isNotEmpty) ...[
-          const SizedBox(height: 12),
+        _ConfidencePill(confidence: confidence),
+      ],
+    );
+  }
+}
+
+class _ConfidencePill extends StatelessWidget {
+  final double confidence;
+  const _ConfidencePill({required this.confidence});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: HitoTokens.successBg,
+        borderRadius: BorderRadius.circular(HitoTokens.rMd),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.verified, size: 12, color: HitoTokens.success),
+          const SizedBox(width: 4),
+          Text(
+            '${(confidence * 100).round()}% confianza',
+            style: GoogleFonts.geist(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: HitoTokens.success,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PriceRange extends StatelessWidget {
+  final int low;
+  final int mid;
+  final int high;
+  final int listedUsd;
+
+  const _PriceRange({
+    required this.low,
+    required this.mid,
+    required this.high,
+    required this.listedUsd,
+  });
+
+  String _fmtK(int v) =>
+      '\$${(v / 1000).toStringAsFixed(0)}k';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: HitoTokens.paper,
+        borderRadius: BorderRadius.circular(HitoTokens.rLg),
+        border: Border.all(color: HitoTokens.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'RANGO ESTIMADO DE MERCADO',
+            style: GoogleFonts.geist(
+              fontSize: 10,
+              letterSpacing: 1.0,
+              fontWeight: FontWeight.w600,
+              color: HitoTokens.ink4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _PricePoint(label: 'Bajo', value: _fmtK(low), emphasized: false),
+              const Spacer(),
+              _PricePoint(label: 'Estimado', value: _fmtK(mid), emphasized: true),
+              const Spacer(),
+              _PricePoint(label: 'Alto', value: _fmtK(high), emphasized: false),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _RangeBar(low: low, mid: mid, high: high, listed: listedUsd),
+          const SizedBox(height: 10),
           Row(
             children: [
-              Icon(Icons.info_outline, size: 14, color: Colors.grey.shade600),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: HitoTokens.ink2,
+                  shape: BoxShape.circle,
+                ),
+              ),
               const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  valuation.reasoning,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade700,
-                        fontStyle: FontStyle.italic,
-                      ),
+              Text(
+                'Listado: ${_fmtK(listedUsd)} USD',
+                style: GoogleFonts.geist(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: HitoTokens.ink2,
                 ),
               ),
             ],
           ),
         ],
-        const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: () {
-            Navigator.of(context).pop();
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => ContractAnalysisScreen(propertyId: property.id),
-              ),
-            );
-          },
-          icon: const Icon(Icons.gavel),
-          label: const Text('Revisar contrato anticrético con tu copiloto legal'),
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 14),
+      ),
+    );
+  }
+}
+
+class _PricePoint extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool emphasized;
+  const _PricePoint({
+    required this.label,
+    required this.value,
+    required this.emphasized,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.geist(
+            fontSize: 10,
+            color: HitoTokens.ink4,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: GoogleFonts.geist(
+            fontSize: emphasized ? 22 : 16,
+            fontWeight: emphasized ? FontWeight.w700 : FontWeight.w600,
+            color: emphasized ? HitoTokens.teal : HitoTokens.ink2,
           ),
         ),
       ],
@@ -250,96 +394,167 @@ class _Body extends StatelessWidget {
   }
 }
 
-class _ValueComparison extends StatelessWidget {
-  final int estimated;
-  final int estimatedUsd;
+class _RangeBar extends StatelessWidget {
+  final int low;
+  final int mid;
+  final int high;
   final int listed;
-  final double deltaPercent;
-  final Color deltaColor;
-  final String label;
 
-  const _ValueComparison({
-    required this.estimated,
-    required this.estimatedUsd,
+  const _RangeBar({
+    required this.low,
+    required this.mid,
+    required this.high,
     required this.listed,
-    required this.deltaPercent,
-    required this.deltaColor,
-    required this.label,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Use a fixed display range slightly broader than low..high
+    final span = (high - low).clamp(1, 1 << 31);
+    final extendedLow = (low - span * 0.15).round();
+    final extendedHigh = (high + span * 0.15).round();
+    final extSpan = (extendedHigh - extendedLow).clamp(1, 1 << 31);
+
+    double pct(int v) =>
+        ((v - extendedLow) / extSpan).clamp(0.0, 1.0);
+
+    return SizedBox(
+      height: 28,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final lowPx = pct(low) * w;
+          final highPx = pct(high) * w;
+          final midPx = pct(mid) * w;
+          final listedPx = pct(listed) * w;
+
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                top: 12,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: HitoTokens.paper3,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 12,
+                left: lowPx,
+                width: (highPx - lowPx).clamp(0.0, w),
+                child: Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [
+                      HitoTokens.teal2,
+                      HitoTokens.teal,
+                    ]),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                left: midPx - 6,
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: HitoTokens.teal,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 6,
+                left: listedPx - 7,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: HitoTokens.ink2,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DeltaBadge extends StatelessWidget {
+  final double deltaPercent;
+  final Color color;
+  final String label;
+  final int listedUsd;
+  final int estimatedUsd;
+
+  const _DeltaBadge({
+    required this.deltaPercent,
+    required this.color,
+    required this.label,
+    required this.listedUsd,
+    required this.estimatedUsd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final diff = (estimatedUsd - listedUsd).abs();
+    final sign = deltaPercent > 0 ? '+' : '−';
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
+        color: color.withAlpha(20),
+        borderRadius: BorderRadius.circular(HitoTokens.rMd),
+        border: Border.all(color: color.withAlpha(80)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: Icon(
+              deltaPercent > 0
+                  ? Icons.trending_up
+                  : (deltaPercent < 0 ? Icons.trending_down : Icons.trending_flat),
+              size: 16,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Estimado',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade700,
-                      ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${(estimated / 1000).toStringAsFixed(0)}K Bs',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                  '$label  $sign${deltaPercent.abs().toStringAsFixed(1)}%',
+                  style: GoogleFonts.geist(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
                 ),
                 Text(
-                  '\$${(estimatedUsd / 1000).toStringAsFixed(0)}K USD paralelo',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade600,
-                      ),
+                  '$sign\$${(diff / 1000).toStringAsFixed(0)}k USD vs mid de mercado',
+                  style: GoogleFonts.geist(
+                    fontSize: 11,
+                    color: HitoTokens.ink3,
+                  ),
                 ),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'Listado',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey.shade700,
-                    ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${(listed / 1000).toStringAsFixed(0)}K Bs',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      decoration: TextDecoration.lineThrough,
-                      color: Colors.grey.shade700,
-                    ),
-              ),
-              const SizedBox(height: 6),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: deltaColor,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$label ${deltaPercent.toStringAsFixed(1)}%',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -356,25 +571,21 @@ class _TcParaleloPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(8),
+        color: HitoTokens.paper2,
+        borderRadius: BorderRadius.circular(HitoTokens.rMd),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.currency_exchange,
-            size: 16,
-            color: Theme.of(context).colorScheme.onSecondaryContainer,
-          ),
+          Icon(Icons.currency_exchange, size: 14, color: HitoTokens.gold),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'Ajustado por TC paralelo: ${rate.toStringAsFixed(1)} Bs/USD '
-              '(oficial ${TcParalelo.oficial})',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSecondaryContainer,
-                    fontWeight: FontWeight.w500,
-                  ),
+              'TC paralelo ${rate.toStringAsFixed(2)} Bs/USD (oficial ${TcParalelo.oficial})',
+              style: GoogleFonts.geist(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: HitoTokens.ink2,
+              ),
             ),
           ),
         ],
@@ -383,56 +594,161 @@ class _TcParaleloPill extends StatelessWidget {
   }
 }
 
-class _ComparablesSection extends StatelessWidget {
-  final List<Property> comparables;
-  const _ComparablesSection({required this.comparables});
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel({required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              Icons.location_searching,
-              size: 14,
-              color: Colors.grey.shade700,
+    return Text(
+      label,
+      style: GoogleFonts.geist(
+        fontSize: 10,
+        letterSpacing: 1.0,
+        fontWeight: FontWeight.w600,
+        color: HitoTokens.ink4,
+      ),
+    );
+  }
+}
+
+class _FactorRow extends StatelessWidget {
+  final String text;
+  const _FactorRow({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final positive = text.startsWith('+');
+    final color = positive ? HitoTokens.success : HitoTokens.danger;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.geist(
+                fontSize: 12,
+                color: HitoTokens.ink2,
+                height: 1.4,
+              ),
             ),
-            const SizedBox(width: 6),
-            Text(
-              '${comparables.length} comparables visibles en el mapa',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey.shade700,
-                    fontWeight: FontWeight.w600,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComparableRow extends StatelessWidget {
+  final String text;
+  const _ComparableRow({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Icon(Icons.location_on_outlined, size: 14, color: HitoTokens.ink4),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.geist(
+                fontSize: 11,
+                color: HitoTokens.ink2,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecommendationCard extends StatelessWidget {
+  final ViewMode viewMode;
+  final String forAgent;
+  final String forClient;
+
+  const _RecommendationCard({
+    required this.viewMode,
+    required this.forAgent,
+    required this.forClient,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final agent = viewMode == ViewMode.agent;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      child: Container(
+        key: ValueKey(agent),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: HitoTokens.paper2,
+          borderRadius: BorderRadius.circular(HitoTokens.rLg),
+          border: Border.all(color: HitoTokens.teal2),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: HitoTokens.teal,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                agent ? 'M' : 'J',
+                style: GoogleFonts.geist(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    agent
+                        ? 'Recomendación para María (agente)'
+                        : 'Recomendación para Juan (cliente)',
+                    style: GoogleFonts.geist(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: HitoTokens.teal2,
+                      letterSpacing: 0.3,
+                    ),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    agent ? forAgent : forClient,
+                    style: GoogleFonts.geist(
+                      fontSize: 13,
+                      color: HitoTokens.ink1,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: comparables
-              .map(
-                (p) => Chip(
-                  avatar: Icon(
-                    Icons.location_on,
-                    size: 14,
-                    color: Colors.grey.shade700,
-                  ),
-                  label: Text(
-                    '${p.address.split(',').first} · ${(p.priceBob / 1000).toStringAsFixed(0)}K',
-                  ),
-                  padding: EdgeInsets.zero,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                  labelStyle: const TextStyle(fontSize: 11),
-                ),
-              )
-              .toList(),
-        ),
-      ],
+      ),
     );
   }
 }
