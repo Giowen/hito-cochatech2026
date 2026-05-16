@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'models/client_profile.dart';
 import 'models/match_result.dart';
 import 'models/property.dart';
+import 'models/valuation_report.dart';
 import 'services/matching_service.dart';
+import 'services/valuation_service.dart';
 
 /// Notifier para el profile del cliente activo. Permite mutación vía .update().
 class ClientProfileNotifier extends Notifier<ClientProfile> {
@@ -49,4 +51,35 @@ class SelectedPropertyIdNotifier extends Notifier<String?> {
 final selectedPropertyIdProvider =
     NotifierProvider<SelectedPropertyIdNotifier, String?>(
   SelectedPropertyIdNotifier.new,
+);
+
+/// Single instance del ValuationService.
+final valuationServiceProvider = Provider<ValuationService>(
+  (ref) => ValuationService(),
+);
+
+/// Valuación para una propiedad específica (family por propertyId).
+final valuationProvider =
+    FutureProvider.family<ValuationReport, String>((ref, propertyId) async {
+  final service = ref.read(valuationServiceProvider);
+  final properties = await ref.read(propertiesProvider.future);
+  final property = {for (final p in properties) p.id: p}[propertyId];
+  if (property == null) {
+    throw Exception('Property not found: $propertyId');
+  }
+  return service.valuate(property: property, allProperties: properties);
+});
+
+/// Property id cuya valuación está activa (muestra comparables en mapa).
+class ActiveValuationPropertyIdNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? id) => state = id;
+}
+
+/// Cuando una valuación está activa, el mapa highlightea los comparables.
+final activeValuationPropertyIdProvider =
+    NotifierProvider<ActiveValuationPropertyIdNotifier, String?>(
+  ActiveValuationPropertyIdNotifier.new,
 );

@@ -43,6 +43,12 @@ class _PropertiesMapState extends ConsumerState<PropertiesMap> {
     final propertiesAsync = ref.watch(propertiesProvider);
     final matchesAsync = ref.watch(matchResultsProvider);
     final selectedId = ref.watch(selectedPropertyIdProvider);
+    final activeValuationId = ref.watch(activeValuationPropertyIdProvider);
+    // Comparables IDs cuando valuation está activa
+    final comparableIds = activeValuationId != null
+        ? ref.watch(valuationProvider(activeValuationId)).value?.comparables ??
+            const <String>[]
+        : const <String>[];
 
     // Listen to selected change, animate map to that property
     ref.listen<String?>(selectedPropertyIdProvider, (prev, current) {
@@ -124,6 +130,21 @@ class _PropertiesMapState extends ConsumerState<PropertiesMap> {
                         .whereType<Marker>()
                         .toList(),
                   ),
+                  // "C" labels para comparables cuando valuation activa
+                  if (comparableIds.isNotEmpty)
+                    MarkerLayer(
+                      markers: properties
+                          .where((p) => comparableIds.contains(p.id))
+                          .map(
+                            (p) => Marker(
+                              point: LatLng(p.lat - 0.0035, p.lng),
+                              width: 28,
+                              height: 28,
+                              child: const _ComparableBadge(),
+                            ),
+                          )
+                          .toList(),
+                    ),
                 ],
               ),
               Positioned(
@@ -138,6 +159,38 @@ class _PropertiesMapState extends ConsumerState<PropertiesMap> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _ComparableBadge extends StatelessWidget {
+  const _ComparableBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.blueGrey.shade700,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(0, 0, 0, 0.3),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const Center(
+        child: Text(
+          'C',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }

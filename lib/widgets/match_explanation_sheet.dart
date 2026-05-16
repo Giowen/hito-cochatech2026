@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/match_result.dart';
 import '../models/property.dart';
 import '../providers.dart';
+import 'valuation_sheet.dart';
 
 /// Bottom sheet con AI streaming explanation del match.
 /// Stream char-by-char tipo "AI typing" (Sprint 2.3).
@@ -117,6 +118,16 @@ class _MatchExplanationSheetState
               match: match,
               streamedText: _streamedText,
               streaming: _streaming,
+              onOpenValuation: () {
+                Navigator.of(context).pop();
+                showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  showDragHandle: true,
+                  builder: (_) =>
+                      ValuationSheet(propertyId: widget.propertyId),
+                );
+              },
             );
           },
         );
@@ -130,12 +141,14 @@ class _SheetBody extends StatelessWidget {
   final MatchResult match;
   final String streamedText;
   final bool streaming;
+  final VoidCallback onOpenValuation;
 
   const _SheetBody({
     required this.property,
     required this.match,
     required this.streamedText,
     required this.streaming,
+    required this.onOpenValuation,
   });
 
   Color _bucketColor() {
@@ -272,10 +285,13 @@ class _SheetBody extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 20),
-            FilledButton.tonalIcon(
-              onPressed: null,
+            FilledButton.icon(
+              onPressed: onOpenValuation,
               icon: const Icon(Icons.calculate),
-              label: const Text('Ver valuación (Sprint 3)'),
+              label: const Text('Ver valuación dinámica'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
             ),
           ],
         ),
