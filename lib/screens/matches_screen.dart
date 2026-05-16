@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/client_profile.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/match_result.dart';
 import '../providers.dart';
+import '../theme.dart';
+import '../widgets/hito_sidebar.dart';
+import '../widgets/hito_top_bar.dart';
 import '../widgets/match_explanation_sheet.dart';
 import '../widgets/properties_map.dart';
 import '../widgets/property_card.dart';
 import '../widgets/voice_input_sheet.dart';
 
-/// MatchesScreen — pantalla principal con layout side-by-side (lista + mapa).
-/// Sprint 1.3 (lista) + Sprint 2.1 (mapa).
+/// MatchesScreen — pantalla principal con layout sidebar + content + map.
+/// Phase A.3: 3-column layout adoptando claude-design canonical.
 class MatchesScreen extends ConsumerWidget {
   const MatchesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Cuando se selecciona una propiedad (desde mapa o lista),
-    // abrir bottom sheet con AI streaming explanation.
+    // Cuando se selecciona propiedad (mapa o lista) → abrir match explanation sheet.
     ref.listen<String?>(selectedPropertyIdProvider, (prev, current) {
       if (current == null || current == prev) return;
       showModalBottomSheet<void>(
@@ -30,135 +32,232 @@ class MatchesScreen extends ConsumerWidget {
     });
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Hito · Matches'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.mic),
-            tooltip: 'Voice input — nuevo perfil',
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                showDragHandle: true,
-                builder: (_) => const VoiceInputSheet(),
-              );
-            },
+      body: Row(
+        children: const [
+          HitoSidebar(),
+          VerticalDivider(width: 1, color: HitoTokens.border, thickness: 1),
+          Expanded(
+            child: Column(
+              children: [
+                HitoTopBar(),
+                Expanded(child: _MainContent()),
+              ],
+            ),
           ),
         ],
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth > 800;
-          if (isWide) {
-            return const Row(
-              children: [
-                SizedBox(width: 400, child: _LeftPanel()),
-                VerticalDivider(width: 1),
-                Expanded(child: PropertiesMap()),
-              ],
-            );
-          }
-          return const _LeftPanel();
-        },
       ),
     );
   }
 }
 
-class _LeftPanel extends ConsumerWidget {
-  const _LeftPanel();
+class _MainContent extends ConsumerWidget {
+  const _MainContent();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 900;
+        if (isWide) {
+          return Row(
+            children: const [
+              SizedBox(width: 420, child: _LeftContentPanel()),
+              VerticalDivider(width: 1, color: HitoTokens.border, thickness: 1),
+              Expanded(child: PropertiesMap()),
+            ],
+          );
+        }
+        return const _LeftContentPanel();
+      },
+    );
+  }
+}
+
+class _LeftContentPanel extends ConsumerWidget {
+  const _LeftContentPanel();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final matchesAsync = ref.watch(matchResultsProvider);
     final profile = ref.watch(clientProfileProvider);
 
-    return Column(
-      children: [
-        _ProfileHeader(profile: profile),
-        Expanded(
-          child: matchesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'Error cargando matches:\n$e',
-                  textAlign: TextAlign.center,
+    return Container(
+      color: HitoTokens.bone,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SearchQueryCard(transcript: profile.voiceInputTranscript),
+          const SizedBox(height: 16),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: _ResultsHeader(),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: matchesAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Error cargando matches:\n$e',
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
+              data: (matches) => _MatchesList(matches: matches),
             ),
-            data: (matches) => _MatchesList(matches: matches),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _ProfileHeader extends StatelessWidget {
-  final ClientProfile profile;
-  const _ProfileHeader({required this.profile});
+class _SearchQueryCard extends ConsumerWidget {
+  final String? transcript;
+  const _SearchQueryCard({required this.transcript});
+
+  void _openVoiceInput(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const VoiceInputSheet(),
+    );
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      color: scheme.surfaceContainerLow,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: scheme.primaryContainer,
-                child: Icon(Icons.person, color: scheme.onPrimaryContainer),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Juan',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    Text(
-                      '${profile.budgetMin ~/ 1000}K - ${profile.budgetMax ~/ 1000}K Bs · ${profile.transactionType} · ≥${profile.minBedrooms} dorm',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey.shade700,
-                          ),
-                    ),
-                  ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _openVoiceInput(context),
+          borderRadius: BorderRadius.circular(HitoTokens.rXl),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: HitoTokens.paper,
+              borderRadius: BorderRadius.circular(HitoTokens.rXl),
+              border: Border.all(color: HitoTokens.border),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Icon(
+                    Icons.search,
+                    size: 18,
+                    color: HitoTokens.ink3,
+                  ),
                 ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    transcript ??
+                        'Toca el micrófono para buscar por voz...',
+                    style: GoogleFonts.geist(
+                      fontSize: 13,
+                      color: transcript != null
+                          ? HitoTokens.ink1
+                          : HitoTokens.ink4,
+                      height: 1.5,
+                      fontStyle: transcript != null
+                          ? FontStyle.normal
+                          : FontStyle.italic,
+                    ),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: HitoTokens.paper2,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.mic_none_rounded,
+                    size: 18,
+                    color: HitoTokens.ink2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ResultsHeader extends ConsumerWidget {
+  const _ResultsHeader();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final matchesAsync = ref.watch(matchResultsProvider);
+    final count = matchesAsync.value?.length ?? 0;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              count > 0 ? '$count propiedades' : 'Resultados',
+              style: GoogleFonts.instrumentSerif(
+                fontSize: 26,
+                color: HitoTokens.ink1,
+                height: 1.0,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Ordenadas por compatibilidad',
+              style: GoogleFonts.geist(
+                fontSize: 12,
+                color: HitoTokens.ink3,
+              ),
+            ),
+          ],
+        ),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: HitoTokens.paper,
+            border: Border.all(color: HitoTokens.border),
+            borderRadius: BorderRadius.circular(HitoTokens.rMd),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Compatibilidad',
+                style: GoogleFonts.geist(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: HitoTokens.ink2,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.expand_more_rounded,
+                size: 16,
+                color: HitoTokens.ink3,
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: profile.requiredTags
-                .map(
-                  (t) => Chip(
-                    label: Text(t.replaceAll('_', ' ')),
-                    padding: EdgeInsets.zero,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                    labelStyle: const TextStyle(fontSize: 11),
-                  ),
-                )
-                .toList(),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -181,10 +280,11 @@ class _MatchesListState extends ConsumerState<_MatchesList> {
   }
 
   void _scrollTo(String propertyId) {
-    final index = widget.matches.indexWhere((m) => m.propertyId == propertyId);
+    final index =
+        widget.matches.indexWhere((m) => m.propertyId == propertyId);
     if (index < 0) return;
-    // Approximate card height + margin; tune if needed
-    const cardHeight = 270.0;
+    const cardHeight = 130.0;
+    if (!_scrollController.hasClients) return;
     final offset = (index * cardHeight).clamp(
       0.0,
       _scrollController.position.maxScrollExtent,
@@ -200,11 +300,8 @@ class _MatchesListState extends ConsumerState<_MatchesList> {
   Widget build(BuildContext context) {
     final propertiesAsync = ref.watch(propertiesProvider);
 
-    // Auto-scroll list when marker is selected from map
     ref.listen<String?>(selectedPropertyIdProvider, (prev, current) {
-      if (current != null && _scrollController.hasClients) {
-        _scrollTo(current);
-      }
+      if (current != null) _scrollTo(current);
     });
 
     return propertiesAsync.when(
@@ -214,7 +311,7 @@ class _MatchesListState extends ConsumerState<_MatchesList> {
         final propMap = {for (final p in properties) p.id: p};
         return ListView.builder(
           controller: _scrollController,
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           itemCount: widget.matches.length,
           itemBuilder: (context, index) {
             final match = widget.matches[index];

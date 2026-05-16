@@ -102,3 +102,40 @@ final contractAnalysisProvider =
   }
   return service.analyzeAnticreticoFor(property);
 });
+
+/// Perspectiva global de vista — afecta valuation/recommendations en todos los flows.
+enum ViewMode {
+  /// Vista cliente — Juan (default). Recommendations enfocadas en buyer perspective.
+  client,
+
+  /// Vista agente — María. Recommendations enfocadas en agente/seller perspective.
+  agent,
+}
+
+class ViewModeNotifier extends Notifier<ViewMode> {
+  @override
+  ViewMode build() => ViewMode.client;
+
+  void set(ViewMode mode) => state = mode;
+  void toggle() => state =
+      state == ViewMode.client ? ViewMode.agent : ViewMode.client;
+}
+
+/// Vista global (María agente / Juan cliente) — controlado desde HitoTopBar.
+final viewModeProvider = NotifierProvider<ViewModeNotifier, ViewMode>(
+  ViewModeNotifier.new,
+);
+
+/// Flujo principal activo en sidebar (Matchmaking / Valuación / Copiloto Legal).
+enum HitoFlow { matchmaking, valuacion, copilotoLegal }
+
+class ActiveFlowNotifier extends Notifier<HitoFlow> {
+  @override
+  HitoFlow build() => HitoFlow.matchmaking;
+
+  void set(HitoFlow flow) => state = flow;
+}
+
+final activeFlowProvider = NotifierProvider<ActiveFlowNotifier, HitoFlow>(
+  ActiveFlowNotifier.new,
+);
