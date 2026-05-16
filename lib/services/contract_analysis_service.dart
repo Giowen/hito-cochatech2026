@@ -1,246 +1,185 @@
+import 'dart:async';
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+
 import '../models/contract_analysis.dart';
 import '../models/property.dart';
+import '../repositories/contract_analysis_cache_repository.dart';
 import 'gravamen_mock.dart';
 import 'groq_client.dart';
 
-/// ContractAnalysisService — analiza contratos inmobiliarios bolivianos con AI.
+/// ContractAnalysisService — análisis legal AI de contratos bolivianos.
 ///
-/// Cobertura: compra-venta, alquiler, anticrético (KEY DIFFERENTIATOR — único en Bolivia).
-/// Demo path: hardcoded canonical para anticretico_sample.txt (13 cláusulas,
-/// gravamen Banco BISA $42K folio 3.01.4.99.0034521, decisión "no firmar").
-/// LLM path: prompt PRD §16.3 con Groq Llama 3.3 70B (few-shot multi-type).
+/// **No hay demo path hardcoded.** El LLM (Groq Llama 3.3 70B) analiza
+/// CUALQUIER texto de contrato — anticrético, compra-venta, alquiler —
+/// con conocimiento del Código Civil boliviano. Resultado cachea en
+/// `contract_analyses` (Supabase) por (property_id, contract_type).
 ///
-/// Repository hook: cuando Drift+Supabase entren, contratos se cargan vía
-/// ContractRepository (que sincroniza con R2 + Supabase). Stubs marcados con // TODO R2.
+/// Gravamen check se mantiene mock (DDRR no expone API público — integración
+/// real via partnership AETN está en Phase 2). El mock se pasa al LLM como
+/// contexto para que cite específicamente Banco BISA y monto cuando aplica,
+/// y el resultado final usa siempre el gravamen real del mock, no la
+/// interpretación del LLM.
 class ContractAnalysisService {
   final GroqClient _groqClient;
   final GravamenMockService _gravamenMock;
+  final ContractAnalysisCacheRepository _cache;
 
   ContractAnalysisService({
     GroqClient? groqClient,
     GravamenMockService? gravamenMock,
+    ContractAnalysisCacheRepository? cache,
   })  : _groqClient = groqClient ?? GroqClient(),
-        _gravamenMock = gravamenMock ?? GravamenMockService();
+        _gravamenMock = gravamenMock ?? GravamenMockService(),
+        _cache = cache ?? NoOpContractAnalysisCacheRepository();
 
-  /// Carga el contrato anticrético canónico (13 cláusulas Banco BISA).
-  /// TODO R2: en producción este texto vendría del bucket Cloudflare R2 vía
-  /// signed URL, no de assets locales.
+  /// Carga el contrato anticrético canónico (13 cláusulas, gravamen Banco BISA).
+  /// TODO R2: en producción cargar via signed URL desde Cloudflare R2.
   Future<String> loadAnticreticoSample() async {
     return rootBundle.loadString('assets/seed/anticretico_sample.txt');
   }
 
-  /// Análisis para anticretico_sample.txt en contexto de [property].
-  /// Demo path retorna hardcoded analysis con 13 cláusulas (1 red, 1 red gravamen,
-  /// 3 yellow, 8 green) + Banco BISA gravamen según has_lien.
+  /// Atajo: carga el sample anticrético y lo analiza para [property].
   Future<ContractAnalysis> analyzeAnticreticoFor(
     Property property, {
-    bool useDemoPath = true,
+    bool useCache = true,
   }) async {
     final contractText = await loadAnticreticoSample();
-    if (useDemoPath) {
-      return _hardcodedAnticreticoAnalysis(property, contractText);
-    }
-    return _llmAnalysis(property, contractText, 'anticretico');
-  }
-
-  ContractAnalysis _hardcodedAnticreticoAnalysis(
-    Property property,
-    String contractText,
-  ) {
-    final gravamen = _gravamenMock.check(property);
-    return ContractAnalysis(
-      contractType: 'anticretico',
+    return analyzeContract(
+      property: property,
       contractText: contractText,
-      overallRiskScore: gravamen.isFlagged ? 74 : 48,
-      analyzedClauses: [
-        const AnalyzedClause(
-          clauseText:
-              'Comparecen Sr. Carlos Mendoza R., con CI 4.231.876 Cbba, mayor de edad, domiciliado en calle Aniceto Arce N° 421, en calidad de PROPIETARIO; y los esposos Juan García y Ana López, con CI 8.421.190 y 9.102.554 respectivamente, en calidad de ANTICRESISTAS.',
-          riskLevel: RiskLevel.low,
-          issue: 'Identificación completa. Validado contra padrón electoral.',
-          suggestion: 'Sin cambios necesarios.',
-        ),
-        const AnalyzedClause(
-          clauseText:
-              'El propietario entrega a los anticresistas el inmueble ubicado en Av. Pando N° 1842, zona Cala Cala, Cochabamba, registrado en Derechos Reales bajo Folio Real 3.01.4.99.0034521, con superficie de terreno de 320 m² y construcción de 280 m².',
-          riskLevel: RiskLevel.low,
-          issue: 'Datos coinciden con Derechos Reales.',
-          suggestion: 'Sin cambios necesarios.',
-        ),
-        const AnalyzedClause(
-          clauseText:
-              'El monto total del anticrético es de Bs 320.000 (TRESCIENTOS VEINTE MIL BOLIVIANOS), que serán entregados en su totalidad al momento de la firma del presente contrato y consignación notarial.',
-          riskLevel: RiskLevel.low,
-          issue:
-              'Monto dentro del rango de mercado para la zona (Bs 280k–360k).',
-          suggestion: 'Sin cambios.',
-        ),
-        const AnalyzedClause(
-          clauseText:
-              'El plazo del presente contrato es de VEINTICUATRO (24) meses calendario, contados a partir de la firma. Renovable por acuerdo escrito de ambas partes.',
-          riskLevel: RiskLevel.low,
-          issue: 'Plazo dentro del marco del Código Civil art. 1430.',
-          suggestion: 'Sin cambios.',
-        ),
-        AnalyzedClause(
-          clauseText:
-              'EL PROPIETARIO declara bajo juramento que el inmueble se encuentra libre de todo gravamen, hipoteca, embargo o cualquier afectación que pudiera limitar el derecho del anticresista.',
-          riskLevel: RiskLevel.high,
-          issue: gravamen.isFlagged
-              ? 'FALSO. El inmueble figura con hipoteca activa Banco BISA \$42,000 USD (folio 3.01.4.99.0034521). Verificado en DD.RR. minutos atrás.'
-              : 'Declaración estándar. Verificada conforme.',
-          suggestion: gravamen.isFlagged
-              ? 'Exigir declaración corregida + carta del banco autorizando el anticrético + protocolización inmediata.'
-              : 'Sin cambios.',
-        ),
-        const AnalyzedClause(
-          clauseText:
-              'Los anticresistas podrán ocupar y usar el inmueble como vivienda familiar, debiendo conservarlo en buen estado y devolverlo en las condiciones recibidas, salvo el desgaste natural.',
-          riskLevel: RiskLevel.low,
-          issue: 'Cláusula estándar.',
-          suggestion: 'Sin cambios.',
-        ),
-        const AnalyzedClause(
-          clauseText:
-              'Al término del contrato el PROPIETARIO se compromete a devolver el monto total del anticrético dentro de los treinta (30) días siguientes, condicionado a la venta de otra propiedad de su titularidad ubicada en zona Sacaba.',
-          riskLevel: RiskLevel.high,
-          issue:
-              'No estándar. La devolución del capital NO puede estar condicionada a la venta de un tercer inmueble. Es ejecutable contra la propiedad anticresada (CC art. 1432).',
-          suggestion:
-              'Renegociar: plazo cierto de devolución (30 días) sin condicionante. Si el propietario insiste, retirarse del deal.',
-        ),
-        const AnalyzedClause(
-          clauseText:
-              'Los servicios de agua, luz, gas y mantenimiento ordinario correrán por cuenta de los anticresistas durante todo el plazo del contrato.',
-          riskLevel: RiskLevel.medium,
-          issue: 'Estándar, pero las deudas previas pueden traspasarse silenciosamente.',
-          suggestion:
-              'Solicitar último estado de cuenta de cada servicio (no mayor a 30 días) antes de la firma.',
-        ),
-        const AnalyzedClause(
-          clauseText:
-              'Toda mejora introducida por los anticresistas pasará a beneficio del propietario sin derecho a indemnización ni compensación alguna.',
-          riskLevel: RiskLevel.medium,
-          issue:
-              'Estándar pero abusiva para mejoras estructurales mayores. La familia García-López puede invertir en patio/cocina.',
-          suggestion:
-              'Modificar: mejoras estructurales mayores a Bs 10.000 con factura serán reembolsadas al término.',
-        ),
-        const AnalyzedClause(
-          clauseText:
-              'El contrato podrá resolverse antes del plazo por mutuo acuerdo o por incumplimiento grave de cualquiera de las partes, previa notificación notarial con treinta (30) días de anticipación.',
-          riskLevel: RiskLevel.low,
-          issue: 'Estándar.',
-          suggestion: 'Sin cambios.',
-        ),
-        const AnalyzedClause(
-          clauseText:
-              'En caso de incumplimiento del propietario, el anticresista podrá retener el inmueble hasta la devolución total del monto, sin que ello configure ocupación indebida.',
-          riskLevel: RiskLevel.medium,
-          issue:
-              'Cláusula favorable para los anticresistas. Sin embargo, su oponibilidad a terceros depende de la protocolización.',
-          suggestion:
-              'Asegúrese de protocolizar el contrato (Cláusula DECIMOTERCERA) para que esta retención sea oponible si el propietario vende o transfiere.',
-        ),
-        const AnalyzedClause(
-          clauseText:
-              'Para cualquier controversia derivada del presente contrato, las partes se someten a la jurisdicción ordinaria de Cochabamba, renunciando expresamente a cualquier otro fuero.',
-          riskLevel: RiskLevel.low,
-          issue: 'Cláusula estándar.',
-          suggestion: 'Sin cambios.',
-        ),
-        const AnalyzedClause(
-          clauseText:
-              'El presente contrato será elevado a Escritura Pública y registrado en Derechos Reales dentro de los quince (15) días siguientes a su suscripción.',
-          riskLevel: RiskLevel.low,
-          issue:
-              'Esencial — sin protocolización, el anticrético no es oponible a terceros (CC art. 1431).',
-          suggestion:
-              'Verificar que se cumpla efectivamente en el plazo de 15 días. Pedir copia del Folio Real actualizado tras la inscripción.',
-        ),
-      ],
-      gravamenCheck: gravamen,
-      fraudPatternsDetected: gravamen.isFlagged
-          ? const [
-              'Cláusula QUINTA contradice información del registro de Derechos Reales: declara propiedad libre, pero figura hipoteca activa Banco BISA \$42,000 USD (folio 3.01.4.99.0034521).',
-              'Cláusula SÉPTIMA condiciona devolución del anticrético a venta de OTRO inmueble en Sacaba — patrón usado para diferir reembolso indefinidamente.',
-            ]
-          : const [],
-      summary: gravamen.isFlagged
-          ? 'Detectamos 2 riesgos críticos: (1) gravamen hipotecario no declarado con Banco BISA por \$42k USD (Cláusula QUINTA es FALSA — verificado en DD.RR.), (2) devolución del capital condicionada a venta de un tercer inmueble (Cláusula SÉPTIMA, no estándar). Más 3 cláusulas que requieren revisión. NO firmar sin levantamiento del gravamen y modificación de la Cláusula 7.'
-          : 'Detectamos 1 cláusula crítica (devolución condicionada) y 3 cláusulas a revisar. 8 cláusulas conforme a estándar.',
-      recommendations: [
-        if (gravamen.isFlagged)
-          'CRÍTICO: Exigir que el propietario levante la hipoteca con BISA o obtenga autorización escrita del banco antes de firmar. Sin esto, el capital del anticrético podría perderse en remate.',
-        'Modificar Cláusula SÉPTIMA: devolución del capital en plazo cierto (30 días) sin condicionante de venta de otro inmueble.',
-        'Solicitar certificado actualizado de Derechos Reales con fecha no mayor a 30 días antes de la firma.',
-        'Pedir últimos estados de cuenta de agua, luz, gas (Cláusula OCTAVA) para evitar transferencia de deudas previas.',
-        'Modificar Cláusula NOVENA: mejoras estructurales mayores a Bs 10.000 con factura serán reembolsadas al término.',
-        'Protocolizar inmediatamente tras la firma (Cláusula DECIMOTERCERA) para asegurar oponibilidad a terceros.',
-      ],
+      contractType: 'anticretico',
+      useCache: useCache,
     );
   }
+
+  /// API pública. Cache check → Groq → cache insert → return.
+  /// Funciona para cualquier `contractType`: anticretico, compraventa, alquiler.
+  Future<ContractAnalysis> analyzeContract({
+    required Property property,
+    required String contractText,
+    required String contractType,
+    bool useCache = true,
+  }) async {
+    if (useCache) {
+      final cached = await _cache.getLatest(
+        propertyId: property.id,
+        contractType: contractType,
+      );
+      if (cached != null) {
+        debugPrint(
+          '[Hito.Contract] cache HIT id=${property.id} type=$contractType '
+          'risk=${cached.overallRiskScore} clauses=${cached.analyzedClauses.length}',
+        );
+        return cached;
+      }
+    }
+
+    debugPrint(
+      '[Hito.Contract] cache MISS id=${property.id} type=$contractType '
+      '→ Groq Llama 3.3',
+    );
+
+    final analysis =
+        await _llmAnalysis(property, contractText, contractType);
+    await _cache.insert(propertyId: property.id, analysis: analysis);
+    return analysis;
+  }
+
+  // ── Internals ───────────────────────────────────────────────────────────
+
+  static const _systemPrompt = '''
+Eres un abogado boliviano senior, especializado en contratos inmobiliarios,
+con conocimiento profundo del Código Civil boliviano. Trabajas con tres tipos:
+
+1. COMPRA-VENTA (CC arts. 584-735): transferencia definitiva de propiedad.
+2. ALQUILER (Ley General del Inquilinato): uso temporal con pago periódico.
+3. ANTICRÉTICO (CC arts. 1429-1438): único en Bolivia — transferencia
+   temporal del uso con entrega de capital, restituible al final del plazo.
+
+Tu trabajo: analizar el contrato cláusula por cláusula y detectar:
+- Cláusulas abusivas (rescisión unilateral sin reembolso, plazos abiertos,
+  sin penalidades por incumplimiento del propietario, etc.).
+- Contradicciones con el estado registral (gravámenes no declarados — el
+  sistema te pasa un gravamen_check externo del registro DDRR).
+- Patrones de fraude documental (devolución de capital condicionada a venta
+  de OTRO inmueble, condiciones sólo verbales no escritas, monto en moneda
+  no oficial sin tasa de cambio fijada, etc.).
+
+ALERTAS EN ESPAÑOL CLARO Y ACCIONABLE para clientes bolivianos.
+
+Devuelve JSON estricto (sin markdown):
+{
+  "contract_type": "compraventa" | "alquiler" | "anticretico",
+  "overall_risk_score": int 0-100 (suma ponderada del riesgo de cada cláusula),
+  "analyzed_clauses": [
+    {
+      "clause_text": string (cita literal del contrato),
+      "risk_level": "high" | "medium" | "low",
+      "issue": string (qué problema o conformidad detectaste, max 40 palabras),
+      "suggestion": string (acción concreta recomendada, max 30 palabras)
+    }
+    // 5 a 15 cláusulas según el contrato
+  ],
+  "fraud_patterns_detected": [strings, máximo 5, vacío si no hay],
+  "summary": string max 90 palabras, ejecutivo, con conteo de high/med/low,
+  "recommendations": [strings, 3-7 items, accionables]
+}
+
+REGLAS:
+- Si el contexto incluye gravamen flagged: la cláusula que declara la
+  propiedad libre de gravámenes debe marcarse high y el fraud pattern debe
+  citar específicamente el banco, monto y folio del gravamen externo.
+- Cada cláusula con risk_level high debe tener una suggestion concreta.
+- summary debe terminar con la decisión: "Firmar", "Firmar con cambios",
+  o "NO firmar sin levantar X".
+- recommendations ordenadas por urgencia descendiente.
+- NO inventes datos. Si un campo del contrato no está claro, marca
+  risk_level medium y pide la información en la suggestion.
+''';
 
   Future<ContractAnalysis> _llmAnalysis(
     Property property,
     String contractText,
     String declaredType,
   ) async {
-    const systemPrompt = '''
-Eres un abogado boliviano especializado en contratos inmobiliarios con conocimiento profundo del Código Civil boliviano. Trabajas con tres tipos de contratos:
+    final gravamen = _gravamenMock.check(property);
 
-1. COMPRA-VENTA (CC arts. 584-735): transferencia definitiva de propiedad
-2. ALQUILER (Ley General del Inquilinato): uso temporal con pago periódico
-3. ANTICRÉTICO (CC arts. 1429-1438): único en Bolivia — transferencia temporal del uso con entrega de capital, restituible al final del plazo
+    final userPayload = {
+      'property': {
+        'id': property.id,
+        'address': property.address,
+        'neighborhood': property.neighborhood,
+        'has_lien': property.hasLien,
+      },
+      'gravamen_check_externo': gravamen.toJson(),
+      'declared_contract_type': declaredType,
+      'contract_text': contractText,
+    };
 
-Tu trabajo: detectar
-- Cláusulas abusivas (cancelación unilateral, plazos ambiguos, sin penalidades)
-- Posibles gravámenes no declarados
-- Patrones de fraude documental
-
-Genera alertas EN ESPAÑOL CLARO, accionables.
-
-Devuelve JSON estricto:
-{
-  "contract_type": "compraventa"|"alquiler"|"anticretico",
-  "overall_risk_score": int 0-100,
-  "analyzed_clauses": [
-    {"clause_text": string (texto literal del contrato), "risk_level": "high"|"medium"|"low", "issue": string, "suggestion": string}
-  ],
-  "fraud_patterns_detected": [strings],
-  "summary": string,
-  "recommendations": [strings]
-}
-
-Para has_lien=true: incluir en fraud_patterns_detected y recommendations.
-''';
-
-    final userPrompt =
-        'Contrato a analizar (tipo declarado: $declaredType):\n\n'
-        '${jsonEncode({"property_has_lien": property.hasLien, "contract": contractText})}';
-
-    final response = await _groqClient.chat(
+    final raw = await _groqClient.chat(
       messages: [
-        {'role': 'system', 'content': systemPrompt},
-        {'role': 'user', 'content': userPrompt},
+        const {'role': 'system', 'content': _systemPrompt},
+        {'role': 'user', 'content': jsonEncode(userPayload)},
       ],
       temperature: 0.2,
       responseFormat: {'type': 'json_object'},
     );
 
-    final json = GroqClient.extractJson(response);
+    final json = GroqClient.extractJson(raw);
     if (json == null) {
-      throw Exception('Failed to parse contract analysis JSON: $response');
+      throw FormatException('Groq returned non-JSON contract analysis: $raw');
     }
 
-    final gravamen = _gravamenMock.check(property);
-
+    // Override gravamen con el del mock (fuente de verdad — el LLM no debe
+    // inventar el estado registral).
     return ContractAnalysis.fromJson({
       ...json,
       'contract_text': contractText,
       'gravamen_check': gravamen.toJson(),
+      'contract_type': (json['contract_type'] as String?) ?? declaredType,
     });
   }
 }

@@ -7,6 +7,7 @@ import 'models/contract_analysis.dart';
 import 'models/valuation_report.dart';
 import 'db/hito_db.dart';
 import 'repositories/drift_cached_supabase_repository.dart';
+import 'repositories/contract_analysis_cache_repository.dart';
 import 'repositories/match_cache_repository.dart';
 import 'repositories/property_repository.dart';
 import 'repositories/supabase_property_repository.dart';
@@ -149,9 +150,20 @@ final activeValuationPropertyIdProvider =
   ActiveValuationPropertyIdNotifier.new,
 );
 
-/// Single instance del ContractAnalysisService.
+/// Cache layer para análisis de contratos (`contract_analyses` Supabase).
+/// Keyed por (property_id, contract_type), insert-only.
+final contractAnalysisCacheRepositoryProvider =
+    Provider<ContractAnalysisCacheRepository>(
+  (ref) => SupabaseContractAnalysisCacheRepository(),
+);
+
+/// ContractAnalysisService — real Groq Llama 3.3 con conocimiento del Código
+/// Civil boliviano. Gravamen sigue mock (DDRR sin API público) — el mock se
+/// pasa al LLM como contexto y se override en el resultado final.
 final contractAnalysisServiceProvider = Provider<ContractAnalysisService>(
-  (ref) => ContractAnalysisService(),
+  (ref) => ContractAnalysisService(
+    cache: ref.watch(contractAnalysisCacheRepositoryProvider),
+  ),
 );
 
 /// Análisis de contrato anticrético para una propiedad específica.

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers.dart';
+import '../screens/contract_analysis_screen.dart';
 import '../theme.dart';
+import 'valuation_sheet.dart';
 
 /// Sidebar 240px — branding + flujos principales nav + agente footer.
 /// Spec: Design/screenshots/v8.png + Design/screenshots/matchmaking-v2.png.
@@ -35,16 +37,35 @@ class HitoSidebar extends ConsumerWidget {
             icon: Icons.trending_up_rounded,
             label: 'Valuación',
             selected: activeFlow == HitoFlow.valuacion,
-            onTap: () =>
-                ref.read(activeFlowProvider.notifier).set(HitoFlow.valuacion),
+            onTap: () {
+              ref.read(activeFlowProvider.notifier).set(HitoFlow.valuacion);
+              final propertyId = _topMatchPropertyId(ref);
+              if (propertyId == null) return;
+              showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (_) => ValuationSheet(propertyId: propertyId),
+              );
+            },
           ),
           _NavItem(
             icon: Icons.shield_outlined,
             label: 'Copiloto Legal',
             badge: '1',
             selected: activeFlow == HitoFlow.copilotoLegal,
-            onTap: () =>
-                ref.read(activeFlowProvider.notifier).set(HitoFlow.copilotoLegal),
+            onTap: () {
+              ref.read(activeFlowProvider.notifier)
+                  .set(HitoFlow.copilotoLegal);
+              final propertyId = _topMatchPropertyId(ref);
+              if (propertyId == null) return;
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      ContractAnalysisScreen(propertyId: propertyId),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 18),
           const _SectionLabel(label: 'PRÓXIMAMENTE'),
@@ -69,6 +90,17 @@ class HitoSidebar extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Devuelve el property_id del top match (mejor compatibility) o null si no hay.
+/// Si selectedPropertyIdProvider tiene algo, prioriza esa selección — útil cuando
+/// el usuario ya clickó una card y luego va a Valuación / Copiloto Legal.
+String? _topMatchPropertyId(WidgetRef ref) {
+  final selected = ref.read(selectedPropertyIdProvider);
+  if (selected != null) return selected;
+  final matches = ref.read(matchResultsProvider).value;
+  if (matches == null || matches.isEmpty) return null;
+  return matches.first.propertyId;
 }
 
 class _LogoHeader extends StatelessWidget {
