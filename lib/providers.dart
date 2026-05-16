@@ -181,3 +181,18 @@ class ActiveFlowNotifier extends Notifier<HitoFlow> {
 final activeFlowProvider = NotifierProvider<ActiveFlowNotifier, HitoFlow>(
   ActiveFlowNotifier.new,
 );
+
+/// Si el usuario ya seleccionó su rol (María/Juan) → mostramos MatchesScreen.
+/// Si no → mostramos RoleSelectorScreen como entry point.
+class HasSelectedRoleNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void confirm() => state = true;
+  void reset() => state = false;
+}
+
+final hasSelectedRoleProvider =
+    NotifierProvider<HasSelectedRoleNotifier, bool>(
+  HasSelectedRoleNotifier.new,
+);
