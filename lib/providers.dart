@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'models/client_profile.dart';
 import 'models/match_result.dart';
 import 'models/property.dart';
+import 'models/contract_analysis.dart';
 import 'models/valuation_report.dart';
+import 'services/contract_analysis_service.dart';
 import 'services/matching_service.dart';
 import 'services/valuation_service.dart';
 
@@ -83,3 +85,20 @@ final activeValuationPropertyIdProvider =
     NotifierProvider<ActiveValuationPropertyIdNotifier, String?>(
   ActiveValuationPropertyIdNotifier.new,
 );
+
+/// Single instance del ContractAnalysisService.
+final contractAnalysisServiceProvider = Provider<ContractAnalysisService>(
+  (ref) => ContractAnalysisService(),
+);
+
+/// Análisis de contrato anticrético para una propiedad específica.
+final contractAnalysisProvider =
+    FutureProvider.family<ContractAnalysis, String>((ref, propertyId) async {
+  final service = ref.read(contractAnalysisServiceProvider);
+  final properties = await ref.read(propertiesProvider.future);
+  final property = {for (final p in properties) p.id: p}[propertyId];
+  if (property == null) {
+    throw Exception('Property not found: $propertyId');
+  }
+  return service.analyzeAnticreticoFor(property);
+});

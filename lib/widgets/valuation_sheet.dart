@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/property.dart';
 import '../models/valuation_report.dart';
 import '../providers.dart';
+import '../screens/contract_analysis_screen.dart';
 import '../utils/tc_paralelo.dart';
 
 /// ValuationSheet — Sprint 3.2 (UI) + 3.3 (vista dual María/Juan).
@@ -228,6 +229,22 @@ class _Body extends StatelessWidget {
             ],
           ),
         ],
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          onPressed: () {
+            Navigator.of(context).pop();
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ContractAnalysisScreen(propertyId: property.id),
+              ),
+            );
+          },
+          icon: const Icon(Icons.gavel),
+          label: const Text('Revisar contrato anticrético con tu copiloto legal'),
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+        ),
       ],
     );
   }
