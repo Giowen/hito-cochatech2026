@@ -4,6 +4,8 @@ import 'models/match_result.dart';
 import 'models/property.dart';
 import 'models/contract_analysis.dart';
 import 'models/valuation_report.dart';
+import 'db/hito_db.dart';
+import 'repositories/drift_cached_supabase_repository.dart';
 import 'repositories/property_repository.dart';
 import 'repositories/supabase_property_repository.dart';
 import 'services/contract_analysis_service.dart';
@@ -29,15 +31,33 @@ final matchingServiceProvider = Provider<MatchingService>(
   (ref) => MatchingService(),
 );
 
-/// Repositorio de propiedades.
-/// Phase B.3: Supabase Postgres como source of truth (real backend).
-/// Wrapped en FallbackPropertyRepository → si Supabase cae o devuelve vacío,
-/// usa InMemoryPropertyRepository (seed JSON) como safety net.
-/// Phase B.4 (siguiente): DriftCachedSupabaseRepository para offline-first
-/// con sync incremental. Mantiene este mismo contract.
+/// Single instance del Drift database. Cleanup automático en dispose.
+final hitoDbProvider = Provider<HitoDatabase>((ref) {
+  final db = HitoDatabase();
+  ref.onDispose(() async => db.close());
+  return db;
+});
+
+/// Repositorio de propiedades — 3-tier resilient.
+/// Phase B.4: Drift cache offline-first wrapping Supabase, con InMemory ultimate fallback.
+///
+/// Read flow:
+///   1. DriftCachedSupabaseRepository.getAll()
+///      → si Drift tiene cache, retorna fast + background refresh de Supabase
+///      → si Drift vacío, esperá Supabase, cachea, retorna
+///      → si Supabase falla y cache vacío → throw
+///   2. FallbackPropertyRepository cacha el throw → usa InMemoryPropertyRepository
+///
+/// Resultado: demo funciona en TRES condiciones distintas:
+///   ✓ Online normal: Supabase data, Drift cache hot
+///   ✓ Supabase slow/intermittent: Drift sirve cached data instantáneo
+///   ✓ Supabase down completo + cache cold: InMemory seed JSON
 final propertyRepositoryProvider = Provider<PropertyRepository>(
   (ref) => FallbackPropertyRepository(
-    primary: SupabasePropertyRepository(),
+    primary: DriftCachedSupabaseRepository(
+      remote: SupabasePropertyRepository(),
+      db: ref.watch(hitoDbProvider),
+    ),
     fallback: InMemoryPropertyRepository(),
   ),
 );
