@@ -15,7 +15,22 @@ class PropertiesMap extends ConsumerStatefulWidget {
 
 class _PropertiesMapState extends ConsumerState<PropertiesMap> {
   late final MapController _mapController;
+  bool _showZones = true;
   static final _defaultCenter = LatLng(-17.395, -66.150);
+
+  // Polygon zones (Sprint 2.4 — reemplazo de flutter_map_heatmap)
+  static final _greenZone = [
+    LatLng(-17.388, -66.150),
+    LatLng(-17.388, -66.130),
+    LatLng(-17.412, -66.130),
+    LatLng(-17.412, -66.150),
+  ];
+  static final _amberZone = [
+    LatLng(-17.370, -66.170),
+    LatLng(-17.370, -66.150),
+    LatLng(-17.390, -66.150),
+    LatLng(-17.390, -66.170),
+  ];
 
   @override
   void initState() {
@@ -50,49 +65,121 @@ class _PropertiesMapState extends ConsumerState<PropertiesMap> {
         data: (matches) {
           final matchMap = {for (final m in matches) m.propertyId: m};
 
-          return FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _defaultCenter,
-              initialZoom: 12.5,
-              minZoom: 10,
-              maxZoom: 17,
-            ),
+          return Stack(
             children: [
-              TileLayer(
-                urlTemplate:
-                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.tokenizers.hito',
-              ),
-              MarkerLayer(
-                markers: properties
-                    .map((property) {
-                      final match = matchMap[property.id];
-                      if (match == null) return null;
-                      final isSelected = property.id == selectedId;
-                      return Marker(
-                        point: property.coords,
-                        width: isSelected ? 64 : 50,
-                        height: isSelected ? 64 : 50,
-                        child: GestureDetector(
-                          onTap: () {
-                            ref
-                                .read(selectedPropertyIdProvider.notifier)
-                                .select(property.id);
-                          },
-                          child: _MarkerBadge(
-                            compatibility: match.compatibilityPercent,
-                            isSelected: isSelected,
-                          ),
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: _defaultCenter,
+                  initialZoom: 12.5,
+                  minZoom: 10,
+                  maxZoom: 17,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.tokenizers.hito',
+                  ),
+                  if (_showZones)
+                    PolygonLayer(
+                      polygons: [
+                        Polygon(
+                          points: _greenZone,
+                          color: Colors.green.withAlpha(60),
+                          borderColor: Colors.green.shade700,
+                          borderStrokeWidth: 2,
                         ),
-                      );
-                    })
-                    .whereType<Marker>()
-                    .toList(),
+                        Polygon(
+                          points: _amberZone,
+                          color: Colors.orange.withAlpha(50),
+                          borderColor: Colors.orange.shade700,
+                          borderStrokeWidth: 2,
+                        ),
+                      ],
+                    ),
+                  MarkerLayer(
+                    markers: properties
+                        .map((property) {
+                          final match = matchMap[property.id];
+                          if (match == null) return null;
+                          final isSelected = property.id == selectedId;
+                          return Marker(
+                            point: property.coords,
+                            width: isSelected ? 64 : 50,
+                            height: isSelected ? 64 : 50,
+                            child: GestureDetector(
+                              onTap: () {
+                                ref
+                                    .read(selectedPropertyIdProvider.notifier)
+                                    .select(property.id);
+                              },
+                              child: _MarkerBadge(
+                                compatibility: match.compatibilityPercent,
+                                isSelected: isSelected,
+                              ),
+                            ),
+                          );
+                        })
+                        .whereType<Marker>()
+                        .toList(),
+                  ),
+                ],
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: _ZonesToggle(
+                  active: _showZones,
+                  onToggle: () =>
+                      setState(() => _showZones = !_showZones),
+                ),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _ZonesToggle extends StatelessWidget {
+  final bool active;
+  final VoidCallback onToggle;
+
+  const _ZonesToggle({required this.active, required this.onToggle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(22),
+      color: active ? Colors.green.shade600 : Colors.white,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: onToggle,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                active ? Icons.layers : Icons.layers_outlined,
+                size: 18,
+                color: active ? Colors.white : Colors.grey.shade800,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Zonas',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: active ? Colors.white : Colors.grey.shade800,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
