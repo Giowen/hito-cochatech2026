@@ -5,6 +5,7 @@ import 'models/property.dart';
 import 'models/contract_analysis.dart';
 import 'models/valuation_report.dart';
 import 'repositories/property_repository.dart';
+import 'repositories/supabase_property_repository.dart';
 import 'services/contract_analysis_service.dart';
 import 'services/matching_service.dart';
 import 'services/valuation_service.dart';
@@ -29,12 +30,16 @@ final matchingServiceProvider = Provider<MatchingService>(
 );
 
 /// Repositorio de propiedades.
-/// MVP: InMemoryPropertyRepository (seed JSON).
-/// Phase 2: swap a DriftPropertyRepository (offline-first + Supabase sync)
-/// — ver `lib/repositories/property_repository.dart` y `lib/ARCHITECTURE.md`.
-/// Este cambio NO toca services, solo el binding del provider.
+/// Phase B.3: Supabase Postgres como source of truth (real backend).
+/// Wrapped en FallbackPropertyRepository → si Supabase cae o devuelve vacío,
+/// usa InMemoryPropertyRepository (seed JSON) como safety net.
+/// Phase B.4 (siguiente): DriftCachedSupabaseRepository para offline-first
+/// con sync incremental. Mantiene este mismo contract.
 final propertyRepositoryProvider = Provider<PropertyRepository>(
-  (ref) => InMemoryPropertyRepository(),
+  (ref) => FallbackPropertyRepository(
+    primary: SupabasePropertyRepository(),
+    fallback: InMemoryPropertyRepository(),
+  ),
 );
 
 /// Carga todas las propiedades vía repository.
