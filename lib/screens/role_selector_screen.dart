@@ -92,8 +92,11 @@ class RoleSelectorScreen extends ConsumerWidget {
                           ],
                         );
                       }
+                      // Cards al top, cada una sizing a su contenido natural.
+                      // (IntrinsicHeight + stretch causaba mismatch entre intrinsic
+                      // y actual height en cards con padding + spacing complejo.)
                       return Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(child: card1),
                           const SizedBox(width: 16),

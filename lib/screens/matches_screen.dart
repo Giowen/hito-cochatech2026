@@ -80,17 +80,22 @@ class _LeftContentPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final matchesAsync = ref.watch(matchResultsProvider);
     final profile = ref.watch(clientProfileProvider);
+    final viewMode = ref.watch(viewModeProvider);
 
     return Container(
       color: HitoTokens.bone,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SearchQueryCard(transcript: profile.voiceInputTranscript),
+          _RoleBanner(viewMode: viewMode),
+          _SearchQueryCard(
+            transcript: profile.voiceInputTranscript,
+            viewMode: viewMode,
+          ),
           const SizedBox(height: 16),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: _ResultsHeader(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: _ResultsHeader(viewMode: viewMode),
           ),
           const SizedBox(height: 8),
           Expanded(
@@ -114,9 +119,84 @@ class _LeftContentPanel extends ConsumerWidget {
   }
 }
 
+/// Banner role-specific arriba del search card.
+/// Vista María (agente): contexto de lead activo, métricas de productividad.
+/// Vista Juan (cliente): contexto de búsqueda personal, presupuesto.
+class _RoleBanner extends StatelessWidget {
+  final ViewMode viewMode;
+  const _RoleBanner({required this.viewMode});
+
+  @override
+  Widget build(BuildContext context) {
+    final isAgent = viewMode == ViewMode.agent;
+    final accent = isAgent ? HitoTokens.teal : HitoTokens.navy;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: HitoTokens.paper,
+        borderRadius: BorderRadius.circular(HitoTokens.rMd),
+        border: Border(
+          left: BorderSide(color: accent, width: 3),
+          top: BorderSide(color: HitoTokens.border),
+          right: BorderSide(color: HitoTokens.border),
+          bottom: BorderSide(color: HitoTokens.border),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+            child: Text(
+              isAgent ? 'M' : 'J',
+              style: GoogleFonts.geist(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isAgent
+                      ? 'Bienvenida, María · Agente Pro'
+                      : 'Hola, Juan · Familia García-López',
+                  style: GoogleFonts.geist(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: HitoTokens.ink1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isAgent
+                      ? '12 listings activos · 3 leads esta semana · 1 contrato pendiente'
+                      : 'Buscando casa para tu familia · presupuesto hasta \$220k USD',
+                  style: GoogleFonts.geist(
+                    fontSize: 11,
+                    color: HitoTokens.ink3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SearchQueryCard extends ConsumerWidget {
   final String? transcript;
-  const _SearchQueryCard({required this.transcript});
+  final ViewMode viewMode;
+  const _SearchQueryCard({required this.transcript, required this.viewMode});
 
   void _openVoiceInput(BuildContext context) {
     showModalBottomSheet<void>(
@@ -129,9 +209,27 @@ class _SearchQueryCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isAgent = viewMode == ViewMode.agent;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-      child: Material(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6, left: 4),
+            child: Text(
+              isAgent
+                  ? 'BÚSQUEDA DEL CLIENTE'
+                  : 'TU BÚSQUEDA POR VOZ',
+              style: GoogleFonts.geist(
+                fontSize: 10,
+                letterSpacing: 1.0,
+                fontWeight: FontWeight.w700,
+                color: HitoTokens.ink4,
+              ),
+            ),
+          ),
+          Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: () => _openVoiceInput(context),
@@ -193,43 +291,55 @@ class _SearchQueryCard extends ConsumerWidget {
           ),
         ),
       ),
+        ],
+      ),
     );
   }
 }
 
 class _ResultsHeader extends ConsumerWidget {
-  const _ResultsHeader();
+  final ViewMode viewMode;
+  const _ResultsHeader({required this.viewMode});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final matchesAsync = ref.watch(matchResultsProvider);
     final count = matchesAsync.value?.length ?? 0;
+    final isAgent = viewMode == ViewMode.agent;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              count > 0 ? '$count propiedades' : 'Resultados',
-              style: GoogleFonts.instrumentSerif(
-                fontSize: 26,
-                color: HitoTokens.ink1,
-                height: 1.0,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isAgent
+                    ? (count > 0 ? 'Matches para tu cliente' : 'Matches')
+                    : (count > 0 ? '$count propiedades' : 'Resultados'),
+                style: GoogleFonts.instrumentSerif(
+                  fontSize: 26,
+                  color: HitoTokens.ink1,
+                  height: 1.0,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Ordenadas por compatibilidad',
-              style: GoogleFonts.geist(
-                fontSize: 12,
-                color: HitoTokens.ink3,
+              const SizedBox(height: 2),
+              Text(
+                isAgent
+                    ? '$count propiedades · 4 con 85%+ compat · 1 con gravamen'
+                    : 'Ordenadas por compatibilidad',
+                style: GoogleFonts.geist(
+                  fontSize: 12,
+                  color: HitoTokens.ink3,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const Spacer(),
+        const SizedBox(width: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
