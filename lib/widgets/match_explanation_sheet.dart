@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/match_result.dart';
 import '../models/property.dart';
 import '../providers.dart';
+import '../theme.dart';
 import 'valuation_sheet.dart';
 
-/// Bottom sheet con AI streaming explanation del match.
-/// Stream char-by-char tipo "AI typing" (Sprint 2.3).
+/// Bottom sheet con AI streaming explanation. Acto 1 wow #4 del pitch.
+/// Streamed char-by-char tipo "AI typing" desde property.aiNotes.
 class MatchExplanationSheet extends ConsumerStatefulWidget {
   final String propertyId;
   const MatchExplanationSheet({super.key, required this.propertyId});
@@ -63,7 +65,7 @@ class _MatchExplanationSheetState
       onError: (e) {
         if (!mounted) return;
         setState(() {
-          _streamedText = '$_streamedText\n\n❌ Error: $e';
+          _streamedText = '$_streamedText\n\nError: $e';
           _streaming = false;
         });
       },
@@ -87,9 +89,7 @@ class _MatchExplanationSheetState
       data: (properties) {
         final property =
             {for (final p in properties) p.id: p}[widget.propertyId];
-        if (property == null) {
-          return const SizedBox(height: 100);
-        }
+        if (property == null) return const SizedBox(height: 100);
         return matchesAsync.when(
           loading: () => const SizedBox(
             height: 200,
@@ -113,7 +113,7 @@ class _MatchExplanationSheetState
                 tagsMissing: const [],
               ),
             );
-            return _SheetBody(
+            return _Body(
               property: property,
               match: match,
               streamedText: _streamedText,
@@ -136,14 +136,14 @@ class _MatchExplanationSheetState
   }
 }
 
-class _SheetBody extends StatelessWidget {
+class _Body extends StatelessWidget {
   final Property property;
   final MatchResult match;
   final String streamedText;
   final bool streaming;
   final VoidCallback onOpenValuation;
 
-  const _SheetBody({
+  const _Body({
     required this.property,
     required this.match,
     required this.streamedText,
@@ -151,20 +151,8 @@ class _SheetBody extends StatelessWidget {
     required this.onOpenValuation,
   });
 
-  Color _bucketColor() {
-    switch (match.colorBucket) {
-      case 'green':
-        return Colors.green.shade600;
-      case 'amber':
-        return Colors.orange.shade600;
-      default:
-        return Colors.grey.shade500;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final bucketColor = _bucketColor();
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -172,77 +160,20 @@ class _SheetBody extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    property.type == 'casa' ? Icons.home : Icons.apartment,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        property.address,
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        '${(property.priceBob / 1000).toStringAsFixed(0)}K Bs · '
-                        '${property.bedrooms} dorm · ${property.areaM2} m²',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey.shade600,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: bucketColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${match.compatibilityPercent}%',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            _Header(property: property, score: match.compatibilityPercent),
             const SizedBox(height: 16),
             Row(
               children: [
-                Icon(
-                  Icons.auto_awesome,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+                Icon(Icons.auto_awesome, size: 14, color: HitoTokens.teal),
                 const SizedBox(width: 6),
                 Text(
                   'AI análisis',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  style: GoogleFonts.geist(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: HitoTokens.teal2,
+                    letterSpacing: 0.6,
+                  ),
                 ),
               ],
             ),
@@ -250,44 +181,53 @@ class _SheetBody extends StatelessWidget {
             Container(
               width: double.infinity,
               constraints: const BoxConstraints(minHeight: 80),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(10),
+                color: HitoTokens.paper2,
+                borderRadius: BorderRadius.circular(HitoTokens.rLg),
+                border: Border.all(color: HitoTokens.border),
               ),
               child: _StreamingText(
                 text: streamedText,
                 isStreaming: streaming,
               ),
             ),
-            if (match.tagsMatched.isNotEmpty) ...[
+            if (match.positiveFactors.isNotEmpty) ...[
               const SizedBox(height: 14),
               Wrap(
-                spacing: 4,
+                spacing: 6,
                 runSpacing: 4,
-                children: match.tagsMatched
+                children: match.positiveFactors
                     .map(
-                      (t) => Chip(
-                        avatar: Icon(
-                          Icons.check_circle,
-                          size: 16,
-                          color: Colors.green.shade700,
-                        ),
-                        label: Text(t.replaceAll('_', ' ')),
-                        padding: EdgeInsets.zero,
-                        materialTapTargetSize:
-                            MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
-                        labelStyle: const TextStyle(fontSize: 11),
+                      (f) => _ChipFactor(
+                        icon: Icons.check_circle_rounded,
+                        color: HitoTokens.success,
+                        label: f,
                       ),
                     )
                     .toList(),
               ),
             ],
-            const SizedBox(height: 20),
+            if (match.negativeFactors.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: match.negativeFactors
+                    .map(
+                      (f) => _ChipFactor(
+                        icon: Icons.remove_circle_rounded,
+                        color: HitoTokens.warning,
+                        label: f,
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+            const SizedBox(height: 18),
             FilledButton.icon(
               onPressed: onOpenValuation,
-              icon: const Icon(Icons.calculate),
+              icon: const Icon(Icons.trending_up_rounded),
               label: const Text('Ver valuación dinámica'),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -300,17 +240,123 @@ class _SheetBody extends StatelessWidget {
   }
 }
 
+class _Header extends StatelessWidget {
+  final Property property;
+  final int score;
+  const _Header({required this.property, required this.score});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = compatibilityColor(score);
+    final neighborhood = (property.neighborhood ?? '')
+        .split('_')
+        .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+
+    return Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          child: Text(
+            '$score',
+            style: GoogleFonts.geist(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                property.displayTitle,
+                style: GoogleFonts.geist(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: HitoTokens.ink1,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                [
+                  if (neighborhood.isNotEmpty) neighborhood,
+                  '\$${(property.priceUsdParalelo / 1000).toStringAsFixed(0)}k USD',
+                  '${property.bedrooms}d',
+                  '${property.areaM2} m²',
+                ].join(' · '),
+                style: GoogleFonts.geist(
+                  fontSize: 11,
+                  color: HitoTokens.ink3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChipFactor extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+
+  const _ChipFactor({
+    required this.icon,
+    required this.color,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withAlpha(18),
+        borderRadius: BorderRadius.circular(HitoTokens.rMd),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.geist(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StreamingText extends StatelessWidget {
   final String text;
   final bool isStreaming;
-
   const _StreamingText({required this.text, required this.isStreaming});
 
   @override
   Widget build(BuildContext context) {
     return RichText(
       text: TextSpan(
-        style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.5),
+        style: GoogleFonts.geist(
+          fontSize: 14,
+          color: HitoTokens.ink1,
+          height: 1.55,
+        ),
         children: [
           TextSpan(text: text),
           if (isStreaming)
@@ -339,7 +385,7 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
   }
@@ -355,9 +401,9 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
     return FadeTransition(
       opacity: _controller,
       child: Container(
-        width: 10,
-        height: 18,
-        color: Theme.of(context).colorScheme.primary,
+        width: 6,
+        height: 16,
+        color: HitoTokens.teal,
         margin: const EdgeInsets.only(left: 2),
       ),
     );
