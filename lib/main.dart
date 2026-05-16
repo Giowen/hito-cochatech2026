@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'test_pages/index_page.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'screens/matches_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
-  runApp(const HitoApp());
+  runApp(const ProviderScope(child: HitoApp()));
 }
 
 class HitoApp extends StatelessWidget {
@@ -20,7 +21,7 @@ class HitoApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: const StackValidationIndex(),
+      home: const MatchesScreen(),
     );
   }
 }
