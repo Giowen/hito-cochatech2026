@@ -8,49 +8,20 @@ import 'groq_client.dart';
 
 /// MatchingService — scorea propiedades contra ClientProfile.
 ///
-/// Modo "demo path" (default): retorna hardcoded compatibility para garantizar
-/// reproducibilidad del demo (Sucre #234 siempre 92%, etc.).
-/// Modo "real LLM": llama Groq Llama 3.3 70B con prompt PRD §16.1.
+/// Demo path (default): usa property.compatibility (pre-computed) y property.aiNotes
+/// para garantizar reproducibilidad. Cero latencia, cero costo, cero variabilidad.
+/// Real LLM path: invoca Groq Llama 3.3 70B con prompt PRD §16.1.
+///
+/// Repository hook: cuando Phase 2 (Drift+Supabase) entre, este service consume
+/// PropertyRepository en vez de rootBundle directamente — sin tocar el resto del flujo.
 class MatchingService {
   final GroqClient _groqClient;
 
   MatchingService({GroqClient? groqClient})
       : _groqClient = groqClient ?? GroqClient();
 
-  /// Compatibility hardcoded por property_id para demo path.
-  /// Distribución alineada con PITCH_PREP §3 — Sucre #234 estrella 92%.
-  static const Map<String, int> demoCompatibility = {
-    'sucre-234': 92,
-    'america-1100': 78,
-    'jordan-560': 65,
-    'sanpedro-45': 54,
-    'calatayud-210': 47,
-    'calacala-890': 45,
-    'villagranado-15': 42,
-    'pacataalta-501': 40,
-    'queruqueru-88': 38,
-    'pacatabaja-340': 36,
-    'tupuraya-75': 35,
-    'sacaba-100': 30,
-    'tiquipaya-45': 28,
-    'quillacollo-200': 27,
-    'sipesipe-5': 25,
-  };
-
-  /// Explanations hardcoded para top properties del demo path.
-  /// Garantiza que el streaming siempre dice lo mismo, alineado con PITCH_PREP §2.
-  static const Map<String, String> demoExplanations = {
-    'sucre-234':
-        '92% compatible contigo. Cumple presupuesto, a 8 minutos caminando de UMSS, acepta mascotas, en zona con vigilancia 24 horas. Tiene jardín y garage para un auto. El match más fuerte con tu perfil.',
-    'america-1100':
-        '78% compatible. Buena casa con tu presupuesto, acepta mascotas y tiene parqueo. Sin embargo, está lejos de UMSS (más de 4 kilómetros) lo que aumenta el tiempo de transporte.',
-    'jordan-560':
-        '65% compatible. Ubicación excelente: cerca de UMSS y centro. Tiene cochera para dos autos. Sobre tu presupuesto en aproximadamente 80 mil bolivianos.',
-    'sanpedro-45':
-        '54% compatible. Casa económica en zona segura. Sin parqueo y sin acepta_mascotas explícito. Solo dos dormitorios, bajo el mínimo de tres que pediste.',
-  };
-
-  /// Carga 15 propiedades hardcoded desde assets/seed/properties.json.
+  /// Carga 12 propiedades canónicas desde assets/seed/properties.json.
+  /// TODO Phase 2: reemplazar por PropertyRepository (in-memory → Drift+Supabase sync).
   Future<List<Property>> loadProperties() async {
     final jsonString =
         await rootBundle.loadString('assets/seed/properties.json');
@@ -60,22 +31,20 @@ class MatchingService {
         .toList();
   }
 
-  /// Score property con LLM real (Groq Llama 3.3 70B).
-  /// Spec del prompt en PRD §16.1.
+  /// Score property vía LLM real (Groq Llama 3.3 70B), prompt PRD §16.1.
   Future<MatchResult> scoreWithLlm({
     required ClientProfile profile,
     required Property property,
   }) async {
     const systemPrompt = '''
-Eres un asistente experto en bienes raíces bolivianos. Tu trabajo es evaluar qué tan bien una propiedad coincide con las preferencias de un cliente.
+Eres un asistente experto en bienes raíces bolivianos. Tu trabajo es evaluar qué tan bien una propiedad coincide con las preferencias de un cliente boliviano.
 
-Considera los siguientes tags Cochabamba como factores de match:
-- Proximidad a universidades (UMSS, UMSFX, UPB, UCB)
-- Mascotas (acepta_mascotas)
-- Parqueo (tiene_parqueo, cochera_2_autos)
-- Seguridad (zona_segura, vigilancia_24h)
-- Transporte (transporte_publico_5min, cerca_centro)
-- Servicios (escuela_publica_cerca, hospital_cerca, mercado_cerca)
+Factores principales:
+- Fit de presupuesto (BOB y USD paralelo).
+- Distancia a ubicación deseada (oficina, colegios).
+- Modalidad (compra, alquiler, anticretico) — si coincide o no.
+- Características: dormitorios, área, parqueo, patio, año de construcción.
+- Tags requeridos por el cliente (patio, familia_segura, cerca_recoleta, etc.).
 
 Devuelve JSON estricto:
 {
@@ -86,8 +55,6 @@ Devuelve JSON estricto:
   "positive_factors": [strings],
   "negative_factors": [strings]
 }
-
-Calcula match basándote en: fit presupuesto, distancia a ubicación deseada, tags cumplidos, fit features.
 ''';
 
     final userPrompt =
@@ -115,32 +82,29 @@ Calcula match basándote en: fit presupuesto, distancia a ubicación deseada, ta
     });
   }
 
-  /// Score property con hardcoded values — usado en demo path para consistencia.
+  /// Score property con valores hardcoded del seed — garantiza demo path.
+  /// Compatibility y aiNotes provienen del Property mismo (claude-design canonical).
   MatchResult scoreHardcoded({
     required ClientProfile profile,
     required Property property,
   }) {
-    final compatibility = demoCompatibility[property.id] ?? 30;
-    final explanation = demoExplanations[property.id] ??
-        'Match basado en presupuesto, ubicación y tags. Score: $compatibility%.';
-
-    final tagsMatched = property.cochabambaTags
-        .where((t) => profile.requiredTags.contains(t))
-        .toList();
-    final tagsMissing = profile.requiredTags
-        .where((t) => !property.cochabambaTags.contains(t))
-        .toList();
+    final compatibility = property.compatibility ?? 30;
+    final explanation = property.aiNotes.isNotEmpty
+        ? property.aiNotes.join(' ')
+        : 'Match basado en presupuesto, ubicación y características. '
+            'Score: $compatibility%.';
 
     final positive = <String>[];
     final negative = <String>[];
 
-    if (property.priceBob >= profile.budgetMin &&
+    if (property.priceBob > 0 &&
+        property.priceBob >= profile.budgetMin &&
         property.priceBob <= profile.budgetMax) {
       positive.add('Dentro de presupuesto');
     } else if (property.priceBob > profile.budgetMax) {
-      negative.add('Sobre presupuesto');
-    } else {
-      positive.add('Bajo presupuesto');
+      negative.add('Excede presupuesto');
+    } else if (property.priceBob > 0 && property.priceBob < profile.budgetMin) {
+      positive.add('Por debajo de presupuesto');
     }
 
     if (property.bedrooms >= profile.minBedrooms) {
@@ -149,8 +113,23 @@ Calcula match basándote en: fit presupuesto, distancia a ubicación deseada, ta
       negative.add('Solo ${property.bedrooms} dormitorios');
     }
 
-    if (property.listingMode != profile.transactionType) {
-      negative.add('Modalidad ${property.listingMode} vs ${profile.transactionType}');
+    if (property.areaM2 >= profile.minAreaM2) {
+      positive.add('${property.areaM2} m² construidos');
+    }
+
+    if (property.parking >= 1) {
+      positive.add('${property.parking} parqueo${property.parking > 1 ? "s" : ""}');
+    } else {
+      negative.add('Sin parqueo');
+    }
+
+    // Anticrético interest match
+    if (profile.requiredTags.contains('acepta_anticretico') &&
+        !property.supportsAnticretico) {
+      negative.add('No admite anticrético');
+    } else if (profile.requiredTags.contains('acepta_anticretico') &&
+        property.supportsAnticretico) {
+      positive.add('Disponible en anticrético');
     }
 
     return MatchResult(
@@ -160,18 +139,18 @@ Calcula match basándote en: fit presupuesto, distancia a ubicación deseada, ta
       explanation: explanation,
       positiveFactors: positive,
       negativeFactors: negative,
-      tagsMatched: tagsMatched,
-      tagsMissing: tagsMissing,
+      tagsMatched: const [],
+      tagsMissing: const [],
     );
   }
 
-  /// API pública. Usa hardcoded para demo path properties, LLM para el resto.
+  /// API pública. Usa hardcoded path si property tiene compatibility pre-computed.
   Future<MatchResult> score({
     required ClientProfile profile,
     required Property property,
     bool useDemoPath = true,
   }) async {
-    if (useDemoPath && demoCompatibility.containsKey(property.id)) {
+    if (useDemoPath && property.compatibility != null) {
       return scoreHardcoded(profile: profile, property: property);
     }
     return scoreWithLlm(profile: profile, property: property);
@@ -195,19 +174,22 @@ Calcula match basándote en: fit presupuesto, distancia a ubicación deseada, ta
   }
 
   /// Streaming de explanation token-by-token para UI tipo AI-typing.
-  /// En demo path simula streaming desde texto hardcoded (consistencia).
-  /// En LLM mode usa Groq streaming real.
+  /// Demo path: simula streaming desde property.aiNotes (consistencia, sin red).
+  /// LLM mode: usa Groq streaming real.
   Stream<String> explainStreaming({
     required ClientProfile profile,
     required Property property,
     bool useDemoPath = true,
   }) async* {
-    if (useDemoPath && demoExplanations.containsKey(property.id)) {
-      final explanation = demoExplanations[property.id]!;
+    if (useDemoPath && property.aiNotes.isNotEmpty) {
+      final compat = property.compatibility ?? 0;
+      final intro = '$compat% compatible contigo. ';
+      final body = property.aiNotes.join(' ');
+      final fullText = '$intro$body';
       // Stream char-by-char con delay 8ms — feel auténtico de LLM streaming
-      for (var i = 0; i < explanation.length; i++) {
+      for (var i = 0; i < fullText.length; i++) {
         await Future.delayed(const Duration(milliseconds: 8));
-        yield explanation[i];
+        yield fullText[i];
       }
       return;
     }

@@ -10,7 +10,7 @@ class GravamenMockService {
       return const GravamenCheck(
         status: 'flagged',
         details:
-            '1 hipoteca activa con BCB (Banco Central de Bolivia), no declarada por el propietario en el contrato. Monto pendiente: Bs 320.000.- Constitución: marzo 2024.',
+            'Propiedad figura como garantía en hipoteca activa con Banco BISA por \$42,000 USD. Folio Real 3.01.4.99.0034521. El contrato presentado declara la propiedad libre de gravámenes (Cláusula QUINTA) — declaración FALSA verificada en DD.RR. 2 horas atrás.',
       );
     }
     return const GravamenCheck(

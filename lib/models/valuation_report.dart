@@ -1,5 +1,6 @@
 /// ValuationReport — output de valuation_service para una propiedad.
-/// Spec en PRD §6.
+/// Spec en PRD §6, extendido con claude-design canonical fields (low/mid/high
+/// range, factors ponderados, comparable details).
 class ValuationReport {
   final String propertyId;
   final int estimatedValueBob;
@@ -7,11 +8,25 @@ class ValuationReport {
   final double deltaPercent; // negativo = sobrevalorado, positivo = subvalorado
   final int estimatedValueUsdParalelo;
   final double usdParaleloRateUsed; // BOB por USD paralelo
-  final List<String> comparables; // property_ids
+  final List<String> comparables; // property_ids (si están en listings activos)
   final double confidenceScore; // 0-1
   final String recommendationForAgent;
   final String recommendationForClient;
   final String reasoning;
+
+  // ── Claude-design canonical fields ────────────────────────
+  /// Estimación rango bajo (USD paralelo) — el mínimo del intervalo de confianza.
+  final int? estimatedValueUsdLow;
+
+  /// Estimación rango alto (USD paralelo) — el máximo del intervalo.
+  final int? estimatedValueUsdHigh;
+
+  /// Factores ponderados pre-formateados (e.g. "+8.2% Ubicación (Cala Cala)").
+  final List<String> factors;
+
+  /// Lista de comparables formateados para display
+  /// (e.g. "A · Av. América 1842 · 265m² · $228K · Vendida Mar 2026").
+  final List<String> comparableDetails;
 
   const ValuationReport({
     required this.propertyId,
@@ -25,6 +40,10 @@ class ValuationReport {
     required this.recommendationForAgent,
     required this.recommendationForClient,
     required this.reasoning,
+    this.estimatedValueUsdLow,
+    this.estimatedValueUsdHigh,
+    this.factors = const [],
+    this.comparableDetails = const [],
   });
 
   /// Etiqueta para la UI (PRD §3.2):
@@ -50,6 +69,11 @@ class ValuationReport {
       recommendationForAgent: json['recommendation_for_agent'] as String? ?? '',
       recommendationForClient: json['recommendation_for_client'] as String? ?? '',
       reasoning: json['reasoning'] as String? ?? '',
+      estimatedValueUsdLow: json['estimated_value_usd_low'] as int?,
+      estimatedValueUsdHigh: json['estimated_value_usd_high'] as int?,
+      factors: (json['factors'] as List? ?? const []).cast<String>(),
+      comparableDetails:
+          (json['comparable_details'] as List? ?? const []).cast<String>(),
     );
   }
 
@@ -65,5 +89,11 @@ class ValuationReport {
         'recommendation_for_agent': recommendationForAgent,
         'recommendation_for_client': recommendationForClient,
         'reasoning': reasoning,
+        if (estimatedValueUsdLow != null)
+          'estimated_value_usd_low': estimatedValueUsdLow,
+        if (estimatedValueUsdHigh != null)
+          'estimated_value_usd_high': estimatedValueUsdHigh,
+        'factors': factors,
+        'comparable_details': comparableDetails,
       };
 }

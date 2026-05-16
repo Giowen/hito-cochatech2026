@@ -62,25 +62,28 @@ class ClientProfile {
           'voice_input_transcript': voiceInputTranscript,
       };
 
-  /// Perfil hardcoded de Juan para demo path (PITCH_PREP §2 + plan demo spec).
-  /// Cuando se ejecute el demo, este es el perfil que produce Voice input.
+  /// Perfil hardcoded de Juan para demo path (canonical claude-design data).
+  /// Voice query rica: presupuesto USD $220k, familia con 2 hijos pequeños,
+  /// oficina en Recoleta, considera anticrético.
   static const ClientProfile demoJuan = ClientProfile(
     id: 'demo-juan',
-    budgetMin: 700000,
-    budgetMax: 850000,
+    // $200k-$220k USD via TC paralelo 12.20 → 2,440K-2,684K BOB
+    budgetMin: 2440000,
+    budgetMax: 2684000,
     transactionType: 'compra',
-    desiredLat: -17.395,
+    // Recoleta (oficina del usuario) — ≤20 min commute target
+    desiredLat: -17.376,
     desiredLng: -66.140,
-    radiusKm: 2.0,
+    radiusKm: 3.0,
     minBedrooms: 3,
-    minAreaM2: 90,
+    minAreaM2: 150,
     requiredTags: [
-      'cerca_UMSS',
-      'acepta_mascotas',
-      'tiene_parqueo',
-      'zona_segura',
+      'patio',
+      'familia_segura',
+      'cerca_recoleta',
+      'acepta_anticretico',
     ],
     voiceInputTranscript:
-        'Casa con jardín, cerca de UMSS, 800 mil bolivianos, acepta mascotas, dos hijos pequeños.',
+        'Busco casa para mi familia, tenemos dos hijos pequeños, presupuesto hasta doscientos veinte mil dólares, queremos tres o cuatro dormitorios y patio. La oficina queda en la Recoleta, idealmente menos de 20 minutos. También nos interesa anticrético.',
   );
 }

@@ -22,6 +22,43 @@ class Property {
   final String description;
   final bool hasLien;
 
+  // ── Claude-design canonical fields (Phase A.2) ─────────────
+  /// Display title, fallback to address.
+  final String? title;
+
+  /// Neighborhood slug (e.g. 'cala_cala', 'recoleta').
+  final String? neighborhood;
+
+  /// Parking spots (vehicles).
+  final int parking;
+
+  /// Lot size in m² (terreno), distinct from area_m2 (construido).
+  final int? lotM2;
+
+  /// All transaction modes supported (e.g. ['venta', 'anticretico']).
+  final List<String> supportedTransactions;
+
+  /// Anticretico amount in BOB (if applicable).
+  final int? anticreticoBob;
+
+  /// Year of construction.
+  final int? yearBuilt;
+
+  /// Pre-computed AI reasoning notes for demo path consistency.
+  final List<String> aiNotes;
+
+  /// Cached compatibility score for demo path (avoids LLM call latency).
+  final int? compatibility;
+
+  /// Days since listing.
+  final int listedDays;
+
+  /// Agent assigned to this listing.
+  final String? agentName;
+
+  /// Gradient/image identifier for visual differentiation.
+  final String image;
+
   const Property({
     required this.id,
     required this.address,
@@ -41,6 +78,18 @@ class Property {
     required this.listingStatus,
     required this.description,
     required this.hasLien,
+    this.title,
+    this.neighborhood,
+    this.parking = 0,
+    this.lotM2,
+    this.supportedTransactions = const [],
+    this.anticreticoBob,
+    this.yearBuilt,
+    this.aiNotes = const [],
+    this.compatibility,
+    this.listedDays = 0,
+    this.agentName,
+    this.image = 'gradient-1',
   });
 
   LatLng get coords => LatLng(lat, lng);
@@ -61,12 +110,36 @@ class Property {
       amenities: (json['amenities'] as List).cast<String>(),
       ageYears: json['age_years'] as int,
       photos: (json['photos'] as List).cast<String>(),
-      cochabambaTags: (json['cochabamba_tags'] as List).cast<String>(),
-      listingStatus: json['listing_status'] as String,
-      description: json['description'] as String,
-      hasLien: json['has_lien'] as bool,
+      cochabambaTags:
+          (json['cochabamba_tags'] as List? ?? const []).cast<String>(),
+      listingStatus: json['listing_status'] as String? ?? 'activa',
+      description: json['description'] as String? ?? '',
+      hasLien: json['has_lien'] as bool? ?? false,
+      title: json['title'] as String?,
+      neighborhood: json['neighborhood'] as String?,
+      parking: json['parking'] as int? ?? 0,
+      lotM2: json['lot_m2'] as int?,
+      supportedTransactions: (json['supported_transactions'] as List?
+              ?? [json['listing_mode'] as String])
+          .cast<String>(),
+      anticreticoBob: json['anticretico_bob'] as int?,
+      yearBuilt: json['year_built'] as int?,
+      aiNotes: (json['ai_notes'] as List? ?? const []).cast<String>(),
+      compatibility: json['compatibility'] as int?,
+      listedDays: json['listed_days'] as int? ?? 0,
+      agentName: json['agent_name'] as String?,
+      image: json['image'] as String? ?? 'gradient-1',
     );
   }
+
+  /// Display name — title si está, address como fallback.
+  String get displayTitle => title ?? address;
+
+  /// True si esta propiedad admite anticrético como modalidad.
+  bool get supportsAnticretico =>
+      supportedTransactions.contains('anticretico') ||
+      listingMode == 'anticretico' ||
+      anticreticoBob != null;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -87,5 +160,17 @@ class Property {
         'listing_status': listingStatus,
         'description': description,
         'has_lien': hasLien,
+        if (title != null) 'title': title,
+        if (neighborhood != null) 'neighborhood': neighborhood,
+        'parking': parking,
+        if (lotM2 != null) 'lot_m2': lotM2,
+        'supported_transactions': supportedTransactions,
+        if (anticreticoBob != null) 'anticretico_bob': anticreticoBob,
+        if (yearBuilt != null) 'year_built': yearBuilt,
+        'ai_notes': aiNotes,
+        if (compatibility != null) 'compatibility': compatibility,
+        'listed_days': listedDays,
+        if (agentName != null) 'agent_name': agentName,
+        'image': image,
       };
 }
