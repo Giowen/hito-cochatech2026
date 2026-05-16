@@ -9,6 +9,7 @@ import 'db/hito_db.dart';
 import 'repositories/drift_cached_supabase_repository.dart';
 import 'repositories/property_repository.dart';
 import 'repositories/supabase_property_repository.dart';
+import 'services/asset_storage.dart';
 import 'services/contract_analysis_service.dart';
 import 'services/matching_service.dart';
 import 'services/valuation_service.dart';
@@ -143,6 +144,20 @@ final contractAnalysisProvider =
     throw Exception('Property not found: $propertyId');
   }
   return service.analyzeAnticreticoFor(property);
+});
+
+/// AssetStorage — upload de fotos, contratos, voice recordings.
+/// MVP: MockAssetStorage (genera placeholder URLs).
+/// Phase 2: swap a R2AssetStorage.fromEnv() cuando credentials estén en .env.
+/// Ver lib/services/asset_storage.dart para setup detallado.
+final assetStorageProvider = Provider<AssetStorage>((ref) {
+  // TODO Phase 2: detectar si R2_ACCESS_KEY_ID está en .env → switch a R2.
+  // try {
+  //   return R2AssetStorage.fromEnv();
+  // } on StateError {
+  //   return MockAssetStorage();
+  // }
+  return MockAssetStorage();
 });
 
 /// Perspectiva global de vista — afecta valuation/recommendations en todos los flows.
