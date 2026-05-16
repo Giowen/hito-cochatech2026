@@ -19,36 +19,50 @@ class HitoTopBar extends ConsumerWidget {
         color: HitoTokens.bone,
         border: Border(bottom: BorderSide(color: HitoTokens.border)),
       ),
-      child: Row(
-        children: [
-          Icon(Icons.location_on_outlined, size: 16, color: HitoTokens.ink2),
-          const SizedBox(width: 6),
-          Text(
-            'Cochabamba',
-            style: GoogleFonts.geist(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: HitoTokens.ink1,
-            ),
-          ),
-          const SizedBox(width: 10),
-          _MarketActivePill(),
-          const Spacer(),
-          _ViewToggle(viewMode: viewMode),
-          const SizedBox(width: 14),
-          _IconAction(
-            icon: Icons.dark_mode_outlined,
-            tooltip: 'Modo oscuro (próximamente)',
-            onTap: () {},
-          ),
-          const SizedBox(width: 4),
-          _IconAction(
-            icon: Icons.notifications_none_rounded,
-            tooltip: 'Notificaciones',
-            badge: true,
-            onTap: () {},
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Responsive: en pantallas estrechas (<600px del panel main), ocultamos
+          // el location meta y el dark mode icon para que el toggle María/Juan
+          // y notificaciones siempre quepan sin overflow.
+          final wide = constraints.maxWidth >= 600;
+          return Row(
+            children: [
+              Icon(
+                Icons.location_on_outlined,
+                size: 16,
+                color: HitoTokens.ink2,
+              ),
+              if (wide) ...[
+                const SizedBox(width: 6),
+                Text(
+                  'Cochabamba',
+                  style: GoogleFonts.geist(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: HitoTokens.ink1,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _MarketActivePill(),
+              ],
+              const Spacer(),
+              _ViewToggle(viewMode: viewMode),
+              const SizedBox(width: 8),
+              if (wide)
+                _IconAction(
+                  icon: Icons.dark_mode_outlined,
+                  tooltip: 'Modo oscuro (próximamente)',
+                  onTap: () {},
+                ),
+              _IconAction(
+                icon: Icons.notifications_none_rounded,
+                tooltip: 'Notificaciones',
+                badge: true,
+                onTap: () {},
+              ),
+            ],
+          );
+        },
       ),
     );
   }

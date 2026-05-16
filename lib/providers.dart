@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'models/client_profile.dart';
 import 'models/match_result.dart';
@@ -31,36 +32,42 @@ final matchingServiceProvider = Provider<MatchingService>(
   (ref) => MatchingService(),
 );
 
-/// Single instance del Drift database. Cleanup automático en dispose.
-final hitoDbProvider = Provider<HitoDatabase>((ref) {
+/// Single instance del Drift database (Mobile/Desktop).
+/// Returns null on Web — sqlite3 WASM en Web requiere setup adicional que
+/// hace overhead vs valor. Web usa Supabase + InMemory fallback (Phase B.3
+/// chain). Mobile usa Drift full offline-first (Phase B.4).
+final hitoDbProvider = Provider<HitoDatabase?>((ref) {
+  if (kIsWeb) return null;
   final db = HitoDatabase();
   ref.onDispose(() async => db.close());
   return db;
 });
 
-/// Repositorio de propiedades — 3-tier resilient.
-/// Phase B.4: Drift cache offline-first wrapping Supabase, con InMemory ultimate fallback.
+/// Repositorio de propiedades — multi-tier resilient.
 ///
-/// Read flow:
+/// Read flow (Mobile con Drift):
 ///   1. DriftCachedSupabaseRepository.getAll()
-///      → si Drift tiene cache, retorna fast + background refresh de Supabase
-///      → si Drift vacío, esperá Supabase, cachea, retorna
-///      → si Supabase falla y cache vacío → throw
-///   2. FallbackPropertyRepository cacha el throw → usa InMemoryPropertyRepository
+///      → cache Drift hit: instantáneo + background refresh Supabase
+///      → cache miss: espera Supabase, cachea, retorna
+///      → Supabase falla + cache cold: throw
+///   2. FallbackPropertyRepository cacha throw → InMemory seed JSON
 ///
-/// Resultado: demo funciona en TRES condiciones distintas:
-///   ✓ Online normal: Supabase data, Drift cache hot
-///   ✓ Supabase slow/intermittent: Drift sirve cached data instantáneo
-///   ✓ Supabase down completo + cache cold: InMemory seed JSON
-final propertyRepositoryProvider = Provider<PropertyRepository>(
-  (ref) => FallbackPropertyRepository(
-    primary: DriftCachedSupabaseRepository(
-      remote: SupabasePropertyRepository(),
-      db: ref.watch(hitoDbProvider),
-    ),
+/// Read flow (Web, sin Drift):
+///   1. SupabasePropertyRepository directo
+///   2. FallbackPropertyRepository cacha throw → InMemory seed JSON
+///
+/// Resultado: demo funciona en todos los escenarios sin tocar UI.
+final propertyRepositoryProvider = Provider<PropertyRepository>((ref) {
+  final supabaseRepo = SupabasePropertyRepository();
+  final db = ref.watch(hitoDbProvider);
+  final PropertyRepository primary = db == null
+      ? supabaseRepo
+      : DriftCachedSupabaseRepository(remote: supabaseRepo, db: db);
+  return FallbackPropertyRepository(
+    primary: primary,
     fallback: InMemoryPropertyRepository(),
-  ),
-);
+  );
+});
 
 /// Carga todas las propiedades vía repository.
 final propertiesProvider = FutureProvider<List<Property>>(
