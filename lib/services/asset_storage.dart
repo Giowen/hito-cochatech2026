@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import '../utils/env.dart';
 
 /// AssetStorage — interface para upload de assets binarios (fotos, PDFs, audio).
 ///
@@ -141,22 +142,24 @@ class R2AssetStorage implements AssetStorage {
     required this.publicBaseUrl,
   });
 
-  /// Construye desde .env. Lanza StateError si falta alguna variable.
+  /// Construye desde env (compile-time defines o .env). Lanza StateError si
+  /// falta alguna variable.
   factory R2AssetStorage.fromEnv() {
-    final accountId = dotenv.env['R2_ACCOUNT_ID'];
-    final bucket = dotenv.env['R2_BUCKET'];
-    final accessKey = dotenv.env['R2_ACCESS_KEY_ID'];
-    final secret = dotenv.env['R2_SECRET_ACCESS_KEY'];
-    final publicUrl = dotenv.env['R2_PUBLIC_BASE_URL'];
+    final accountId = Env.get('R2_ACCOUNT_ID');
+    final bucket = Env.get('R2_BUCKET');
+    final accessKey = Env.get('R2_ACCESS_KEY_ID');
+    final secret = Env.get('R2_SECRET_ACCESS_KEY');
+    final publicUrl = Env.get('R2_PUBLIC_BASE_URL');
     if (accountId == null ||
         bucket == null ||
         accessKey == null ||
         secret == null ||
         publicUrl == null) {
       throw StateError(
-        'R2 credentials missing from .env. '
-        'Requires R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, '
-        'R2_SECRET_ACCESS_KEY, R2_PUBLIC_BASE_URL. See ARCHITECTURE.md.',
+        'R2 credentials missing. Pass via --dart-define=R2_ACCOUNT_ID=... etc, '
+        'or include in local .env. Requires R2_ACCOUNT_ID, R2_BUCKET, '
+        'R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_PUBLIC_BASE_URL. '
+        'See ARCHITECTURE.md.',
       );
     }
     return R2AssetStorage(

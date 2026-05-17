@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
+import '../models/property.dart';
 import '../providers.dart';
 import '../theme.dart';
 
@@ -19,22 +21,7 @@ class PropertiesMap extends ConsumerStatefulWidget {
 
 class _PropertiesMapState extends ConsumerState<PropertiesMap> {
   late final MapController _mapController;
-  bool _showZones = true;
   static final _defaultCenter = LatLng(-17.395, -66.150);
-
-  // Polygon zones (Sprint 2.4 — reemplazo de flutter_map_heatmap)
-  static final _greenZone = [
-    LatLng(-17.388, -66.150),
-    LatLng(-17.388, -66.130),
-    LatLng(-17.412, -66.130),
-    LatLng(-17.412, -66.150),
-  ];
-  static final _amberZone = [
-    LatLng(-17.370, -66.170),
-    LatLng(-17.370, -66.150),
-    LatLng(-17.390, -66.150),
-    LatLng(-17.390, -66.170),
-  ];
 
   @override
   void initState() {
@@ -45,7 +32,7 @@ class _PropertiesMapState extends ConsumerState<PropertiesMap> {
   @override
   Widget build(BuildContext context) {
     final propertiesAsync = ref.watch(propertiesProvider);
-    final matchesAsync = ref.watch(matchResultsProvider);
+    final batchAsync = ref.watch(matchingBatchProvider);
     final selectedId = ref.watch(selectedPropertyIdProvider);
     final activeValuationId = ref.watch(activeValuationPropertyIdProvider);
     // Comparables IDs cuando valuation está activa
@@ -69,112 +56,194 @@ class _PropertiesMapState extends ConsumerState<PropertiesMap> {
     return propertiesAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
-      data: (properties) => matchesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (matches) {
-          final matchMap = {for (final m in matches) m.propertyId: m};
+      data: (properties) {
+        final batch = batchAsync.value;
+        final matches = batch?.completed ?? const [];
+        final matchMap = {for (final m in matches) m.propertyId: m};
+        final pendingIds = batch?.pending.toSet() ?? <String>{};
+        final isScoring =
+            batch != null && batch.candidates.isNotEmpty && !batch.isComplete;
 
-          return Stack(
-            children: [
-              FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: _defaultCenter,
-                  initialZoom: 12.5,
-                  minZoom: 10,
-                  maxZoom: 17,
+        return Stack(
+          children: [
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _defaultCenter,
+                initialZoom: 12.5,
+                minZoom: 10,
+                maxZoom: 17,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.tokenizers.hito',
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.tokenizers.hito',
-                  ),
-                  if (_showZones)
-                    PolygonLayer(
-                      polygons: [
-                        Polygon(
-                          points: _greenZone,
-                          color: Colors.green.withAlpha(60),
-                          borderColor: Colors.green.shade700,
-                          borderStrokeWidth: 2,
-                        ),
-                        Polygon(
-                          points: _amberZone,
-                          color: Colors.orange.withAlpha(50),
-                          borderColor: Colors.orange.shade700,
-                          borderStrokeWidth: 2,
-                        ),
-                      ],
-                    ),
+                // Radar pulse — un círculo expansivo + ping en cada candidate
+                // todavía pendiente. Solo durante scoring.
+                if (isScoring)
                   MarkerLayer(
-                    markers: properties.map((property) {
-                      final match = matchMap[property.id];
-                      final isSelected = property.id == selectedId;
-                      return Marker(
-                        point: property.coords,
-                        width: isSelected ? 92 : 78,
-                        height: isSelected ? 56 : 46,
-                        child: GestureDetector(
-                          onTap: () {
-                            ref
-                                .read(selectedPropertyIdProvider.notifier)
-                                .select(property.id);
-                          },
-                          child: match != null
-                              ? _MarkerBadge(
-                                  compatibility: match.compatibilityPercent,
-                                  isSelected: isSelected,
-                                  isAnticretico:
-                                      property.supportsAnticretico,
-                                )
-                              : _BrowseMarker(
-                                  priceUsd: property.priceUsdParalelo,
-                                  isAnticretico:
-                                      property.supportsAnticretico,
-                                  isSelected: isSelected,
-                                ),
+                    markers: batch.candidates
+                        .where((p) => pendingIds.contains(p.id))
+                        .map(
+                          (p) => Marker(
+                            point: p.coords,
+                            width: 80,
+                            height: 80,
+                            child: const _RadarPing(),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                MarkerLayer(
+                  markers: properties.map((property) {
+                    final match = matchMap[property.id];
+                    final isSelected = property.id == selectedId;
+                    final isPending = pendingIds.contains(property.id);
+                    return Marker(
+                      point: property.coords,
+                      width: isSelected ? 92 : 78,
+                      height: isSelected ? 56 : 46,
+                      child: GestureDetector(
+                        onTap: () {
+                          ref
+                              .read(selectedPropertyIdProvider.notifier)
+                              .select(property.id);
+                        },
+                        child: _MarkerForState(
+                          property: property,
+                          match: match,
+                          isSelected: isSelected,
+                          isPending: isPending,
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                // "C" labels para comparables cuando valuation activa
+                if (comparableIds.isNotEmpty)
+                  MarkerLayer(
+                    markers: properties
+                        .where((p) => comparableIds.contains(p.id))
+                        .map(
+                          (p) => Marker(
+                            point: LatLng(p.lat - 0.0035, p.lng),
+                            width: 28,
+                            height: 28,
+                            child: const _ComparableBadge(),
+                          ),
+                        )
+                        .toList(),
                   ),
-                  // "C" labels para comparables cuando valuation activa
-                  if (comparableIds.isNotEmpty)
-                    MarkerLayer(
-                      markers: properties
-                          .where((p) => comparableIds.contains(p.id))
-                          .map(
-                            (p) => Marker(
-                              point: LatLng(p.lat - 0.0035, p.lng),
-                              width: 28,
-                              height: 28,
-                              child: const _ComparableBadge(),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                ],
-              ),
+              ],
+            ),
+            if (isScoring)
               Positioned(
-                top: 12,
-                right: 12,
-                child: _ZonesToggle(
-                  active: _showZones,
-                  onToggle: () =>
-                      setState(() => _showZones = !_showZones),
-                ),
-              ),
-              if (matchesAsync.isLoading)
-                Positioned(
-                  bottom: 16,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: _AiEvaluatingPill(),
+                bottom: 16,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: _AiEvaluatingPill(
+                    done: batch.done,
+                    total: batch.total,
                   ),
                 ),
-            ],
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Decide qué tipo de marker mostrar según el estado del scoring:
+/// - Si hay match completo → MarkerBadge con score
+/// - Si está pending → BrowseMarker atenuado (con price)
+/// - Si no es candidato → BrowseMarker normal
+class _MarkerForState extends StatelessWidget {
+  final Property property;
+  final dynamic match;
+  final bool isSelected;
+  final bool isPending;
+  const _MarkerForState({
+    required this.property,
+    required this.match,
+    required this.isSelected,
+    required this.isPending,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (match != null) {
+      return TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutBack,
+        builder: (context, t, child) {
+          return Opacity(
+            opacity: t.clamp(0.0, 1.0),
+            child: Transform.scale(
+              scale: 0.6 + 0.4 * t.clamp(0.0, 1.0),
+              child: child,
+            ),
+          );
+        },
+        child: _MarkerBadge(
+          compatibility: match.compatibilityPercent,
+          isSelected: isSelected,
+          isAnticretico: property.supportsAnticretico,
+        ),
+      );
+    }
+    return Opacity(
+      opacity: isPending ? 0.45 : 1.0,
+      child: _BrowseMarker(
+        priceUsd: property.priceUsdParalelo,
+        isAnticretico: property.supportsAnticretico,
+        isSelected: isSelected,
+      ),
+    );
+  }
+}
+
+/// Ping circular tipo radar — pulsa con expansión + fade hasta desaparecer.
+/// Se renderiza sobre cada candidate pendiente para sugerir "evaluando aquí".
+class _RadarPing extends StatefulWidget {
+  const _RadarPing();
+
+  @override
+  State<_RadarPing> createState() => _RadarPingState();
+}
+
+class _RadarPingState extends State<_RadarPing>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (context, _) {
+          return CustomPaint(
+            size: const Size(80, 80),
+            painter: _RadarPainter(progress: _ctrl.value),
           );
         },
       ),
@@ -182,9 +251,53 @@ class _PropertiesMapState extends ConsumerState<PropertiesMap> {
   }
 }
 
+class _RadarPainter extends CustomPainter {
+  final double progress;
+  _RadarPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final maxRadius = size.shortestSide / 2;
+    // Dos ondas defasadas para mayor densidad visual.
+    for (final phase in [0.0, 0.5]) {
+      final t = (progress + phase) % 1.0;
+      final radius = maxRadius * t;
+      final opacity = (1.0 - t).clamp(0.0, 1.0);
+      final paint = Paint()
+        ..color = HitoTokens.teal.withValues(alpha: 0.45 * opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      canvas.drawCircle(center, radius, paint);
+      // Disco interno suave.
+      final fill = Paint()
+        ..color = HitoTokens.teal.withValues(alpha: 0.08 * opacity)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(center, radius * 0.8, fill);
+    }
+    // Centro fijo.
+    final core = Paint()
+      ..color = HitoTokens.teal.withValues(alpha: 0.8)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 3, core);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RadarPainter old) =>
+      old.progress != progress;
+}
+
+// avoid unused warnings for math (only used inside painter when we add sweep)
+// ignore: unused_element
+double _kIgnoreLint(double v) => math.max(v, 0);
+
 /// Pill teal flotante en la base del mapa durante el scoring AI.
-/// Muestra spinner + texto rotativo simulando los pasos del pipeline.
+/// Muestra spinner + texto rotativo + contador real (X de Y).
 class _AiEvaluatingPill extends StatefulWidget {
+  final int done;
+  final int total;
+  const _AiEvaluatingPill({required this.done, required this.total});
+
   @override
   State<_AiEvaluatingPill> createState() => _AiEvaluatingPillState();
 }
@@ -217,44 +330,65 @@ class _AiEvaluatingPillState extends State<_AiEvaluatingPill> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
-      child: Container(
-        key: ValueKey(_index),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        decoration: BoxDecoration(
-          color: HitoTokens.ink1,
-          borderRadius: BorderRadius.circular(HitoTokens.r2xl),
-          boxShadow: const [
-            BoxShadow(
-              color: Color.fromRGBO(0, 0, 0, 0.18),
-              blurRadius: 12,
-              offset: Offset(0, 4),
+    final counter =
+        widget.total > 0 ? '${widget.done}/${widget.total}' : '';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      decoration: BoxDecoration(
+        color: HitoTokens.ink1,
+        borderRadius: BorderRadius.circular(HitoTokens.r2xl),
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(0, 0, 0, 0.18),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white,
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
+          ),
+          const SizedBox(width: 10),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Text(
               _messages[_index],
+              key: ValueKey(_index),
               style: GoogleFonts.geist(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: Colors.white,
               ),
             ),
+          ),
+          if (counter.isNotEmpty) ...[
+            const SizedBox(width: 10),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: HitoTokens.teal,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                counter,
+                style: GoogleFonts.geist(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -374,48 +508,6 @@ class _ComparableBadge extends StatelessWidget {
             color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 13,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ZonesToggle extends StatelessWidget {
-  final bool active;
-  final VoidCallback onToggle;
-
-  const _ZonesToggle({required this.active, required this.onToggle});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      elevation: 4,
-      borderRadius: BorderRadius.circular(22),
-      color: active ? Colors.green.shade600 : Colors.white,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: onToggle,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                active ? Icons.layers : Icons.layers_outlined,
-                size: 18,
-                color: active ? Colors.white : Colors.grey.shade800,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Zonas',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: active ? Colors.white : Colors.grey.shade800,
-                ),
-              ),
-            ],
           ),
         ),
       ),

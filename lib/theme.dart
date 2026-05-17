@@ -1,6 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+/// Display font de Hito — Gullia, cargada desde `assets/fonts/Gullia.otf`
+/// (ver pubspec.yaml). Reemplaza `GoogleFonts.instrumentSerif` en todos
+/// los titulares (Hito brand, headings de pantallas, hero text, etc).
+///
+/// Por qué este helper en vez de Theme.of(...).textTheme directo: muchos
+/// widgets ya usaban GoogleFonts.instrumentSerif(...) con tamaños custom.
+/// El helper permite cambio low-touch (sed-style) sin reescribir cada Style.
+TextStyle hitoDisplay({
+  double fontSize = 22,
+  Color? color,
+  double height = 1.0,
+  double letterSpacing = 0,
+  FontWeight? fontWeight,
+  FontStyle? fontStyle,
+}) {
+  return TextStyle(
+    fontFamily: 'Gullia',
+    fontSize: fontSize,
+    color: color,
+    height: height,
+    letterSpacing: letterSpacing,
+    fontWeight: fontWeight,
+    fontStyle: fontStyle,
+  );
+}
+
 /// Hito Design System tokens (light).
 /// Source of truth: `Design/index.html` :root CSS variables.
 /// Spec del claude-design — premium proptech editorial style.
@@ -156,7 +182,9 @@ TextTheme _buildHitoTextTheme(Brightness brightness) {
   final ink3Color = isDark ? HitoTokensDark.ink3 : HitoTokens.ink3;
 
   TextStyle display(double size, {double letterSpacing = -0.01, double height = 1.1}) =>
-      GoogleFonts.instrumentSerif(
+      // Gullia es el display font de la marca (custom .otf en assets).
+      // Antes era InstrumentSerif via google_fonts.
+      hitoDisplay(
         fontSize: size,
         color: inkColor,
         letterSpacing: letterSpacing,

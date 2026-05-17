@@ -1,0 +1,118 @@
+{
+  "_description": "Leads pre-existentes en el inbox de María. Da contexto al demo: cuando el jurado entra como agente, hay un pipeline poblado con mix de calientes/tibios/fríos. Cuando el demoer hace una voice query como cliente, ese lead se SUMA encima del seed (lead más reciente al tope).",
+  "leads": [
+    {
+      "id": "lead-seed-001",
+      "client_name": "Patricia Vargas",
+      "client_phone": "+591 70415664",
+      "profile": {
+        "id": "voice-lead-001",
+        "budget_min": 1830000,
+        "budget_max": 2440000,
+        "transaction_type": "compra",
+        "desired_lat": -17.3815,
+        "desired_lng": -66.1623,
+        "radius_km": 2.5,
+        "min_bedrooms": 3,
+        "min_area_m2": 180,
+        "required_tags": ["familia_segura", "cerca_universidad"],
+        "voice_input_transcript": "Hola María, te paso lo que busco. Familia con dos hijos universitarios, queremos casa en Cala Cala o cerca de UMSS, mínimo tres dormitorios, presupuesto hasta 200 mil dólares, urgente porque los chicos empiezan facultad en enero."
+      },
+      "qualification_score": 88,
+      "qualification_reasoning": [
+        "Presupuesto realista para Cala Cala 3 dorm ($150-200k típico).",
+        "Urgencia explícita: empiezan facultad en enero.",
+        "Criterios claros: tipo, modalidad, dorms, zona, tags.",
+        "Familia con 2 hijos universitarios — estabilidad financiera implícita."
+      ],
+      "status": "pending",
+      "source": "share_link",
+      "created_at": "2026-05-17T08:42:00.000Z"
+    },
+    {
+      "id": "lead-seed-002",
+      "client_name": "Carlos Mendoza",
+      "client_phone": "+591 70415664",
+      "profile": {
+        "id": "voice-lead-002",
+        "budget_min": 366000,
+        "budget_max": 488000,
+        "transaction_type": "anticretico",
+        "desired_lat": -17.3712,
+        "desired_lng": -66.1492,
+        "radius_km": 3.0,
+        "min_bedrooms": 2,
+        "min_area_m2": 80,
+        "required_tags": ["acepta_anticretico"],
+        "voice_input_transcript": "Busco un anticrético en Queru Queru o por ahí, dos dormitorios alcanza, tengo unos 30 mil 40 mil dólares para anticrético."
+      },
+      "qualification_score": 71,
+      "qualification_reasoning": [
+        "Modalidad anticrético, capital realista para la zona.",
+        "Criterios mínimos viables (2 dorm, 80m²).",
+        "No menciona urgencia ni timeline — pedir más contexto.",
+        "Sin nombre de familia ni motivación clara — buscar info en primera llamada."
+      ],
+      "status": "pending",
+      "source": "organic",
+      "created_at": "2026-05-17T07:15:00.000Z"
+    },
+    {
+      "id": "lead-seed-003",
+      "client_name": "Roberto Silva",
+      "client_phone": "+591 70415664",
+      "profile": {
+        "id": "voice-lead-003",
+        "budget_min": 305000,
+        "budget_max": 488000,
+        "transaction_type": "alquiler",
+        "desired_lat": -17.3935,
+        "desired_lng": -66.1570,
+        "radius_km": 1.5,
+        "min_bedrooms": 1,
+        "min_area_m2": 40,
+        "required_tags": [],
+        "voice_input_transcript": "Necesito alquilar algo cerca del centro, una sola persona, no importa mucho el tamaño, lo que sea que esté dentro de presupuesto."
+      },
+      "qualification_score": 42,
+      "qualification_reasoning": [
+        "Criterios vagos: 'lo que sea' sin presupuesto explícito mensual.",
+        "Sin urgencia ni timeline.",
+        "Alquiler bajo no es nuestra mejor modalidad — comisión limitada.",
+        "Puede ser válido pero no priorizar sobre leads de compra/anticrético."
+      ],
+      "status": "pending",
+      "source": "organic",
+      "created_at": "2026-05-16T22:30:00.000Z"
+    },
+    {
+      "id": "lead-seed-004",
+      "client_name": "Ana López",
+      "client_phone": "+591 70415664",
+      "profile": {
+        "id": "voice-lead-004",
+        "budget_min": 1830000,
+        "budget_max": 2562000,
+        "transaction_type": "compra",
+        "desired_lat": -17.376,
+        "desired_lng": -66.140,
+        "radius_km": 3.0,
+        "min_bedrooms": 3,
+        "min_area_m2": 150,
+        "required_tags": ["familia_segura", "cerca_recoleta"],
+        "voice_input_transcript": "Buenas, soy Ana, busco casa familiar en Recoleta o cerca, tres dormitorios mínimo, hasta 210 mil dólares, ya vimos dos propiedades el mes pasado pero no nos convencieron."
+      },
+      "qualification_score": 82,
+      "qualification_reasoning": [
+        "Compradora activa — ya vio propiedades, está en fase de decisión.",
+        "Presupuesto $150-210k cabe en Recoleta 3 dorm.",
+        "Criterios precisos (zona específica, dorms claros, tags relevantes).",
+        "Auto-presentación + contexto previo — alta motivación."
+      ],
+      "status": "contacted",
+      "source": "share_link",
+      "created_at": "2026-05-15T14:00:00.000Z",
+      "last_contact_at": "2026-05-16T10:30:00.000Z"
+    }
+  ]
+}

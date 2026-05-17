@@ -48,6 +48,10 @@ dependencies:
   drift: ^2.33.0
   drift_flutter: ^0.3.0
   sqlite3_flutter_libs: ^0.6.0+eol
+  shared_preferences: ^2.3.5
+  file_picker: ^8.1.4
+  syncfusion_flutter_pdf: ^27.2.5
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -74,8 +78,22 @@ flutter:
   uses-material-design: true
 
   assets:
-    - .env
+    # WARNING: NO agregues `.env` a esta lista. Si se incluye, los secrets
+    # (GROQ/SUPABASE/OPENROUTER keys) se empaquetan en `build/web/assets/.env`
+    # y quedan accesibles desde DevTools de cualquier navegador.
+    # En su lugar, lee secrets vía `lib/utils/env.dart::Env.get(...)` que
+    # prefiere `--dart-define` (compile-time) sobre dotenv (dev fallback).
+    # Dev local: copia .env al working dir; main.dart hace try/catch al cargar.
+    # Producción: build con `flutter build web --dart-define-from-file=env.json`
     - assets/seed/
+
+  # Custom fonts. Gullia es el display font (titulares editoriales) —
+  # reemplaza InstrumentSerif vía google_fonts. Cross-platform Web/Android/
+  # iOS/Desktop. El OTF se embebe en el bundle de cada plataforma.
+  fonts:
+    - family: Gullia
+      fonts:
+        - asset: assets/fonts/Gullia.otf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

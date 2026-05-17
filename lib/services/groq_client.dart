@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import '../utils/env.dart';
 
 /// Modelos asignados por tarea. Los IDs se resuelven dinámicamente según el
 /// provider activo (OpenRouter si `OPENROUTER_API_KEY` presente, Groq si no).
@@ -13,7 +14,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 /// evitar rate limits del free tier de Groq.
 class GroqModels {
   static bool get _isOpenRouter {
-    final key = dotenv.env['OPENROUTER_API_KEY'];
+    final key = Env.get('OPENROUTER_API_KEY');
     return key != null && key.isNotEmpty;
   }
 
@@ -81,28 +82,14 @@ class GroqClient {
 
   /// Detecta provider activo basado en env. OpenRouter tiene precedencia
   /// si OPENROUTER_API_KEY está presente y no vacía.
-  bool get _isOpenRouter {
-    final key = dotenv.env['OPENROUTER_API_KEY'];
-    return key != null && key.isNotEmpty;
-  }
+  bool get _isOpenRouter => Env.get('OPENROUTER_API_KEY') != null;
 
   /// API key para chat — OpenRouter si configurado, Groq como fallback.
-  String? get _chatApiKey {
-    if (_isOpenRouter) {
-      final key = dotenv.env['OPENROUTER_API_KEY'];
-      if (key != null && key.isNotEmpty) return key;
-    }
-    final groqKey = dotenv.env['GROQ_API_KEY'];
-    if (groqKey == null || groqKey.isEmpty) return null;
-    return groqKey;
-  }
+  String? get _chatApiKey =>
+      _isOpenRouter ? Env.get('OPENROUTER_API_KEY') : Env.get('GROQ_API_KEY');
 
   /// API key para Whisper — SIEMPRE Groq.
-  String? get _whisperApiKey {
-    final key = dotenv.env['GROQ_API_KEY'];
-    if (key == null || key.isEmpty) return null;
-    return key;
-  }
+  String? get _whisperApiKey => Env.get('GROQ_API_KEY');
 
   /// Base URL para chat según provider.
   String get _chatBaseUrl =>
@@ -159,8 +146,31 @@ class GroqClient {
         data: body,
         options: Options(headers: _chatHeaders(apiKey)),
       );
-      final content =
-          response.data!['choices'][0]['message']['content'] as String;
+      // OpenRouter ocasionalmente devuelve `message.content == null` cuando
+      // el modelo es de tipo reasoning (la respuesta llega en `reasoning`),
+      // o si el modelo se rehúsa. Antes esto era `as String` y crasheaba con
+      // TypeError → la propiedad caía al heuristic fallback con factores feos.
+      final choices = response.data?['choices'] as List?;
+      if (choices == null || choices.isEmpty) {
+        throw FormatException(
+          'LLM response sin choices. body=${response.data}',
+        );
+      }
+      final message = (choices.first as Map?)?['message'] as Map?;
+      final content = (message?['content'] as String?) ??
+          (message?['reasoning'] as String?);
+      if (content == null || content.isEmpty) {
+        // Loguear el body completo (truncado) para diagnosticar.
+        final bodyStr = response.data.toString();
+        final trimmed = bodyStr.length > 600
+            ? '${bodyStr.substring(0, 600)}…'
+            : bodyStr;
+        throw FormatException(
+          'LLM returned null/empty content. provider='
+          '${_isOpenRouter ? "openrouter" : "groq"} model=$effectiveModel '
+          'body=$trimmed',
+        );
+      }
       return content;
     } on DioException catch (e) {
       // Log response body on 4xx para diagnosticar (key inválida, modelo

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/lead.dart';
 import '../models/match_result.dart';
 import '../providers.dart';
 import '../theme.dart';
+import '../widgets/top_banner.dart';
 import '../widgets/ai_thinking_panel.dart';
 import '../widgets/hito_sidebar.dart';
 import '../widgets/hito_top_bar.dart';
@@ -20,8 +22,13 @@ class MatchesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Cuando se selecciona propiedad (mapa o lista) → abrir match explanation sheet.
+    // Si ya hay un sheet abierto (canPop=true), lo cerramos antes para no stackear.
     ref.listen<String?>(selectedPropertyIdProvider, (prev, current) {
       if (current == null || current == prev) return;
+      final nav = Navigator.of(context, rootNavigator: true);
+      if (nav.canPop()) {
+        nav.pop();
+      }
       showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
@@ -32,21 +39,49 @@ class MatchesScreen extends ConsumerWidget {
       });
     });
 
-    return Scaffold(
-      body: Row(
-        children: const [
-          HitoSidebar(),
-          VerticalDivider(width: 1, color: HitoTokens.border, thickness: 1),
-          Expanded(
-            child: Column(
-              children: [
-                HitoTopBar(),
-                Expanded(child: _MainContent()),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // <900px (mobile/tablet portrait): el sidebar fijo de 240px sería
+        // mitad de pantalla. Lo movemos a un Drawer + agregamos botón menu en
+        // el AppBar (HitoTopBar muestra el icono cuando recibe onOpenDrawer).
+        final isCompact = constraints.maxWidth < 900;
+        if (isCompact) {
+          return Scaffold(
+            drawer: const Drawer(
+              width: HitoSidebar.width,
+              backgroundColor: HitoTokens.bone,
+              child: HitoSidebar(),
             ),
+            body: Builder(
+              builder: (innerCtx) => Column(
+                children: [
+                  HitoTopBar(
+                    onOpenDrawer: () => Scaffold.of(innerCtx).openDrawer(),
+                  ),
+                  const Expanded(child: _MainContent()),
+                ],
+              ),
+            ),
+          );
+        }
+        return const Scaffold(
+          body: Row(
+            children: [
+              HitoSidebar(),
+              VerticalDivider(
+                  width: 1, color: HitoTokens.border, thickness: 1),
+              Expanded(
+                child: Column(
+                  children: [
+                    HitoTopBar(),
+                    Expanded(child: _MainContent()),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -272,6 +307,26 @@ class _SearchQueryCardState extends ConsumerState<_SearchQueryCard> {
       if (!mounted) return;
       ref.read(clientProfileProvider.notifier).update(profile);
       ref.invalidate(matchResultsProvider);
+
+      // Si está en vista cliente, esta búsqueda crea un lead en el inbox de
+      // María. Igual que voice_input_sheet — el flujo "ecosistema dual".
+      final viewMode = ref.read(viewModeProvider);
+      if (viewMode == ViewMode.client) {
+        final shareSource = ref.read(shareLinkOriginProvider);
+        // ignore: discarded_futures
+        ref.read(leadsProvider.notifier).addFromVoice(
+              profile: profile,
+              source:
+                  shareSource ? LeadSource.shareLink : LeadSource.organic,
+            );
+        if (mounted) {
+          TopBanner.show(
+            context,
+            message: 'Tu búsqueda se envió a María. Te contactará pronto.',
+            icon: Icons.send_rounded,
+          );
+        }
+      }
       _focusNode.unfocus();
     } catch (e) {
       if (!mounted) return;
@@ -435,7 +490,7 @@ class _ResultsHeader extends ConsumerWidget {
                 isAgent
                     ? (count > 0 ? 'Matches para tu cliente' : 'Listings')
                     : (count > 0 ? '$count propiedades' : 'Inventario'),
-                style: GoogleFonts.instrumentSerif(
+                style: hitoDisplay(
                   fontSize: 26,
                   color: HitoTokens.ink1,
                   height: 1.0,
@@ -584,7 +639,7 @@ class _EmptyMatchesCta extends ConsumerWidget {
             Text(
               'Cuéntanos lo que buscas',
               textAlign: TextAlign.center,
-              style: GoogleFonts.instrumentSerif(
+              style: hitoDisplay(
                 fontSize: 22,
                 color: HitoTokens.ink1,
                 height: 1.2,

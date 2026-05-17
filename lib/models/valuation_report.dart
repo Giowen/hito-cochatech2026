@@ -55,22 +55,31 @@ class ValuationReport {
   }
 
   factory ValuationReport.fromJson(Map<String, dynamic> json) {
+    int? asInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return null;
+    }
+
     return ValuationReport(
       propertyId: json['property_id'] as String? ?? '',
-      estimatedValueBob: json['estimated_value_bob'] as int,
-      listedValueBob: json['listed_value_bob'] as int? ?? 0,
+      estimatedValueBob: asInt(json['estimated_value_bob']) ?? 0,
+      listedValueBob: asInt(json['listed_value_bob']) ?? 0,
       deltaPercent: (json['delta_percent'] as num? ?? 0).toDouble(),
       estimatedValueUsdParalelo:
-          json['estimated_value_usd_paralelo'] as int? ?? 0,
+          asInt(json['estimated_value_usd_paralelo']) ?? 0,
       usdParaleloRateUsed:
           (json['usd_paralelo_rate_used'] as num? ?? 12.5).toDouble(),
-      comparables: (json['comparables'] as List? ?? []).cast<String>(),
+      comparables: (json['comparables'] as List? ?? const []).cast<String>(),
       confidenceScore: (json['confidence_score'] as num? ?? 0.7).toDouble(),
-      recommendationForAgent: json['recommendation_for_agent'] as String? ?? '',
-      recommendationForClient: json['recommendation_for_client'] as String? ?? '',
+      recommendationForAgent:
+          json['recommendation_for_agent'] as String? ?? '',
+      recommendationForClient:
+          json['recommendation_for_client'] as String? ?? '',
       reasoning: json['reasoning'] as String? ?? '',
-      estimatedValueUsdLow: json['estimated_value_usd_low'] as int?,
-      estimatedValueUsdHigh: json['estimated_value_usd_high'] as int?,
+      estimatedValueUsdLow: asInt(json['estimated_value_usd_low']),
+      estimatedValueUsdHigh: asInt(json['estimated_value_usd_high']),
       factors: (json['factors'] as List? ?? const []).cast<String>(),
       comparableDetails:
           (json['comparable_details'] as List? ?? const []).cast<String>(),

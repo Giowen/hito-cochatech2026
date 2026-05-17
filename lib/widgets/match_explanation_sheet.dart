@@ -23,7 +23,6 @@ class _MatchExplanationSheetState
     extends ConsumerState<MatchExplanationSheet> {
   String _streamedText = '';
   bool _streaming = true;
-  StreamSubscription<String>? _subscription;
 
   @override
   void initState() {
@@ -31,20 +30,34 @@ class _MatchExplanationSheetState
     WidgetsBinding.instance.addPostFrameCallback((_) => _startStream());
   }
 
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
-  }
+  // No dispose extra — el _typeOut chequea `mounted` en cada iteración y se
+  // detiene solo cuando el widget muere.
 
   Future<void> _startStream() async {
     final propertiesAsync = ref.read(propertiesProvider);
     final properties = propertiesAsync.value;
-    if (properties == null) return;
+    if (properties == null) {
+      if (mounted) {
+        setState(() {
+          _streamedText =
+              'Cargando inventario… volvé a abrir esta tarjeta en un momento.';
+          _streaming = false;
+        });
+      }
+      return;
+    }
 
     final property =
         {for (final p in properties) p.id: p}[widget.propertyId];
-    if (property == null) return;
+    if (property == null) {
+      if (mounted) {
+        setState(() {
+          _streamedText = 'Propiedad no encontrada (id: ${widget.propertyId}).';
+          _streaming = false;
+        });
+      }
+      return;
+    }
 
     final profile = ref.read(clientProfileProvider);
     if (profile == null) {
@@ -59,14 +72,16 @@ class _MatchExplanationSheetState
       return;
     }
 
-    // Si la propiedad fue descartada por el prefilter (no está en
-    // matchResults), no streameamos un score falseado del LLM. Mostramos
-    // mensaje claro: no pasó los criterios duros.
     final matchesAsync = ref.read(matchResultsProvider);
     final matches = matchesAsync.value ?? const [];
-    final isInMatches =
-        matches.any((m) => m.propertyId == widget.propertyId);
-    if (!isInMatches) {
+    final match = matches
+        .where((m) => m.propertyId == widget.propertyId)
+        .firstOrNull;
+
+    // Si la propiedad fue descartada por el prefilter (no está en
+    // matchResults), no streameamos un score falseado. Mostramos mensaje
+    // claro: no pasó los criterios duros.
+    if (match == null) {
       if (mounted) {
         setState(() {
           _streamedText =
@@ -80,29 +95,34 @@ class _MatchExplanationSheetState
       return;
     }
 
-    final service = ref.read(matchingServiceProvider);
+    // Animar SIEMPRE localmente desde el match ya scoreado.
+    //
+    // Antes: explainStreaming consultaba el cache → si miss, abría stream a
+    // Groq cuyos chunks llegan en bursts grandes (5-30 chars por chunk) → el
+    // efecto "typing" se rompía y el texto aparecía de golpe. Ahora siempre
+    // tenemos match.explanation en memoria (lo trae el matchResultsProvider).
+    // Animamos char-by-char con un delay constante para una sensación
+    // consistente sin importar cache hit/miss.
+    final text = match.explanation.isEmpty
+        ? '${match.compatibilityPercent}% compatible contigo.'
+        : '${match.compatibilityPercent}% compatible contigo. ${match.explanation}';
+    _typeOut(text);
+  }
 
+  /// Anima [text] char-by-char en `_streamedText`. Cancela limpiamente si
+  /// el widget se unmonta.
+  Future<void> _typeOut(String text) async {
     final buffer = StringBuffer();
-    _subscription = service
-        .explainStreaming(profile: profile, property: property)
-        .listen(
-      (delta) {
-        if (!mounted) return;
-        buffer.write(delta);
-        setState(() => _streamedText = buffer.toString());
-      },
-      onDone: () {
-        if (!mounted) return;
-        setState(() => _streaming = false);
-      },
-      onError: (e) {
-        if (!mounted) return;
-        setState(() {
-          _streamedText = '$_streamedText\n\nError: $e';
-          _streaming = false;
-        });
-      },
-    );
+    for (var i = 0; i < text.length; i++) {
+      if (!mounted) return;
+      buffer.write(text[i]);
+      setState(() => _streamedText = buffer.toString());
+      // Pause ligeramente más en puntuación para sensación "human-like".
+      final c = text[i];
+      final delay = (c == '.' || c == ',' || c == ';') ? 60 : 12;
+      await Future<void>.delayed(Duration(milliseconds: delay));
+    }
+    if (mounted) setState(() => _streaming = false);
   }
 
   @override
@@ -140,10 +160,6 @@ class _MatchExplanationSheetState
                 clientProfileId: '',
                 compatibilityPercent: 0,
                 explanation: '',
-                positiveFactors: const [],
-                negativeFactors: const [],
-                tagsMatched: const [],
-                tagsMissing: const [],
               ),
             );
             return _Body(
@@ -225,36 +241,31 @@ class _Body extends StatelessWidget {
                 isStreaming: streaming,
               ),
             ),
-            if (match.positiveFactors.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: match.positiveFactors
-                    .map(
-                      (f) => _ChipFactor(
-                        icon: Icons.check_circle_rounded,
-                        color: HitoTokens.success,
-                        label: f,
-                      ),
-                    )
-                    .toList(),
+            if (match.recommended.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _FactorSection(
+                label: 'RECOMENDADO',
+                icon: Icons.check_circle_rounded,
+                color: HitoTokens.success,
+                items: match.recommended,
               ),
             ],
-            if (match.negativeFactors.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: match.negativeFactors
-                    .map(
-                      (f) => _ChipFactor(
-                        icon: Icons.remove_circle_rounded,
-                        color: HitoTokens.warning,
-                        label: f,
-                      ),
-                    )
-                    .toList(),
+            if (match.considerations.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _FactorSection(
+                label: 'A TENER EN CUENTA',
+                icon: Icons.info_outline_rounded,
+                color: HitoTokens.warning,
+                items: match.considerations,
+              ),
+            ],
+            if (match.risks.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _FactorSection(
+                label: 'RIESGO',
+                icon: Icons.warning_amber_rounded,
+                color: HitoTokens.danger,
+                items: match.risks,
               ),
             ],
             const SizedBox(height: 18),
@@ -317,13 +328,39 @@ class _Header extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 3),
+              // Línea 1: bedrooms · baños · área construida · parqueos · precio
               Text(
                 [
                   if (neighborhood.isNotEmpty) neighborhood,
                   '\$${(property.priceUsdParalelo / 1000).toStringAsFixed(0)}k USD',
-                  '${property.bedrooms}d',
-                  '${property.areaM2} m²',
+                ].join(' · '),
+                style: GoogleFonts.geist(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: HitoTokens.ink2,
+                ),
+              ),
+              const SizedBox(height: 2),
+              // Línea 2: dormitorios + baños + parqueos
+              Text(
+                [
+                  '${property.bedrooms} dorm',
+                  '${property.bathrooms} baños',
+                  if (property.parking > 0) '${property.parking} parqueo${property.parking > 1 ? "s" : ""}',
+                ].join(' · '),
+                style: GoogleFonts.geist(
+                  fontSize: 11,
+                  color: HitoTokens.ink3,
+                ),
+              ),
+              const SizedBox(height: 1),
+              // Línea 3: superficie + año
+              Text(
+                [
+                  '${property.areaM2}m² construido',
+                  if (property.lotM2 != null) 'lote ${property.lotM2}m²',
+                  if (property.yearBuilt != null) 'año ${property.yearBuilt}',
                 ].join(' · '),
                 style: GoogleFonts.geist(
                   fontSize: 11,
@@ -338,38 +375,80 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _ChipFactor extends StatelessWidget {
+/// Sección con header (label + color) y lista vertical de items con bullet
+/// teñido. Reemplaza al viejo `_ChipFactor` para dar jerarquía visual clara
+/// entre recommended/considerations/risks.
+class _FactorSection extends StatelessWidget {
+  final String label;
   final IconData icon;
   final Color color;
-  final String label;
+  final List<String> items;
 
-  const _ChipFactor({
+  const _FactorSection({
+    required this.label,
     required this.icon,
     required this.color,
-    required this.label,
+    required this.items,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        color: color.withAlpha(18),
+        color: color.withAlpha(14),
         borderRadius: BorderRadius.circular(HitoTokens.rMd),
+        border: Border.all(color: color.withAlpha(60)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 11, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: GoogleFonts.geist(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: color,
-            ),
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.geist(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: color,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 6),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, right: 8),
+                    child: Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: GoogleFonts.geist(
+                        fontSize: 12.5,
+                        color: HitoTokens.ink1,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers.dart';
 import '../screens/add_property_screen.dart';
 import '../theme.dart';
 
 /// Top bar global — ubicación + mercado activo + vista María/Juan + actions.
 /// Vista global afecta todos los flows (matchmaking/valuación/copiloto legal).
+///
+/// [onOpenDrawer] se pasa en layouts mobile/compact donde el sidebar vive en
+/// un Drawer en vez de fijo. Cuando es null, no se renderiza el botón menu.
 class HitoTopBar extends ConsumerWidget {
-  const HitoTopBar({super.key});
+  final VoidCallback? onOpenDrawer;
+  const HitoTopBar({super.key, this.onOpenDrawer});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -28,6 +34,14 @@ class HitoTopBar extends ConsumerWidget {
           final wide = constraints.maxWidth >= 600;
           return Row(
             children: [
+              if (onOpenDrawer != null) ...[
+                IconButton(
+                  icon: Icon(Icons.menu_rounded, color: HitoTokens.ink2),
+                  tooltip: 'Menú',
+                  onPressed: onOpenDrawer,
+                ),
+                const SizedBox(width: 4),
+              ],
               Icon(
                 Icons.location_on_outlined,
                 size: 16,
@@ -47,9 +61,12 @@ class HitoTopBar extends ConsumerWidget {
                 _MarketActivePill(),
               ],
               const Spacer(),
-              if (viewMode == ViewMode.agent)
+              if (viewMode == ViewMode.agent) ...[
+                _ShareLinkButton(compact: !wide),
+                const SizedBox(width: 6),
                 _NewPropertyButton(compact: !wide),
-              if (viewMode == ViewMode.agent) const SizedBox(width: 8),
+                const SizedBox(width: 8),
+              ],
               _ViewToggle(viewMode: viewMode),
               const SizedBox(width: 8),
               if (wide)
@@ -67,6 +84,207 @@ class HitoTopBar extends ConsumerWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Botón "Mi link" — abre un modal con la URL pública que María comparte por
+/// WhatsApp con sus clientes. Cualquier cliente que entre a esa URL es
+/// taggeado con `LeadSource.shareLink` cuando crea un lead vía voice query.
+///
+/// **Por qué importa para el demo**: el desafío exige "ecosistema dual".
+/// Sin un mecanismo de captura el ecosistema queda manco. Este botón es el
+/// puente: María comparte el link, el cliente busca, el lead aparece en el
+/// inbox de María con badge especial.
+class _ShareLinkButton extends StatelessWidget {
+  final bool compact;
+  const _ShareLinkButton({required this.compact});
+
+  static const _agentSlug = 'maria-quiroga';
+  static const _baseUrl = 'https://hito.app/a/';
+
+  void _openModal(BuildContext context) {
+    final url = '$_baseUrl$_agentSlug';
+    final waMsg = Uri.encodeComponent(
+      'Hola! Soy María Quiroga, agente inmobiliaria. '
+      'Te paso mi link para que me cuentes qué casa buscas — la AI ya '
+      'estructura tu perfil y yo te respondo con opciones puntuales: $url',
+    );
+    final waUrl = 'https://wa.me/?text=$waMsg';
+
+    showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding:
+            const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+        backgroundColor: HitoTokens.paper,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(HitoTokens.rLg),
+        ),
+        child: ConstrainedBox(
+          // Antes era ancho default del Dialog (>600px). Esto lo deja
+          // proporcional al contenido — typical card-like en lugar de hoja.
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: HitoTokens.teal,
+                      borderRadius: BorderRadius.circular(HitoTokens.rMd),
+                    ),
+                    child: const Icon(Icons.link,
+                        color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Tu link de captura',
+                          style: hitoDisplay(
+                            fontSize: 22,
+                            color: HitoTokens.ink1,
+                            height: 1.1,
+                          ),
+                        ),
+                        Text(
+                          'Cuando un cliente lo abre y hace su búsqueda, '
+                          'aparece como lead en tu inbox.',
+                          style: GoogleFonts.geist(
+                            fontSize: 11.5,
+                            color: HitoTokens.ink3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                decoration: BoxDecoration(
+                  color: HitoTokens.paper2,
+                  borderRadius: BorderRadius.circular(HitoTokens.rMd),
+                  border: Border.all(color: HitoTokens.border),
+                ),
+                child: SelectableText(
+                  url,
+                  style: GoogleFonts.geistMono(
+                    fontSize: 12.5,
+                    color: HitoTokens.ink1,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        // Copy real al clipboard + feedback.
+                        await Clipboard.setData(ClipboardData(text: url));
+                        if (!context.mounted) return;
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: HitoTokens.ink2,
+                            duration: const Duration(seconds: 2),
+                            content: Text(
+                              'Link copiado al portapapeles',
+                              style: GoogleFonts.geist(color: Colors.white),
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded, size: 16),
+                      label: const Text('Copiar link'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () async {
+                        // Abre WhatsApp Web/app en pestaña nueva con mensaje
+                        // pre-armado para reenviar al cliente.
+                        final ok = await launchUrl(
+                          Uri.parse(waUrl),
+                          mode: LaunchMode.externalApplication,
+                        );
+                        if (!context.mounted) return;
+                        Navigator.of(context).pop();
+                        if (!ok) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: HitoTokens.danger,
+                              content: Text(
+                                'No se pudo abrir WhatsApp',
+                                style: GoogleFonts.geist(color: Colors.white),
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.chat_rounded, size: 16),
+                      label: const Text('Compartir WhatsApp'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF25D366),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: HitoTokens.paper,
+      borderRadius: BorderRadius.circular(HitoTokens.r2xl),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(HitoTokens.r2xl),
+        onTap: () => _openModal(context),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 12,
+            vertical: 7,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.link, size: 16, color: HitoTokens.teal),
+              if (!compact) ...[
+                const SizedBox(width: 4),
+                Text(
+                  'Mi link',
+                  style: GoogleFonts.geist(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: HitoTokens.teal,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

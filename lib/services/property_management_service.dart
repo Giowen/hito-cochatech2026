@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -133,10 +134,13 @@ class PropertyManagementService {
   }
 
   /// Generador de IDs únicos para nuevas propiedades creadas por agente.
-  /// Formato: `agent-{timestamp_ms}-{random_3}`. Estable y único.
+  /// Formato: `agent-{timestamp_ms}-{random_3}`. El sufijo random es
+  /// genuinamente aleatorio (no derivado del timestamp), así dos inserts en
+  /// el mismo milisegundo no colisionan.
+  static final _idRandom = Random();
   static String newPropertyId() {
     final ts = DateTime.now().millisecondsSinceEpoch;
-    final rand = (ts % 1000).toString().padLeft(3, '0');
+    final rand = _idRandom.nextInt(1000).toString().padLeft(3, '0');
     return 'agent-$ts-$rand';
   }
 }

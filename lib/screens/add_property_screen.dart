@@ -26,6 +26,8 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
   final _address = TextEditingController();
   final _title = TextEditingController();
   final _priceUsd = TextEditingController();
+  final _anticreticoBob = TextEditingController();
+  final _rentMonthlyBob = TextEditingController();
   final _bedrooms = TextEditingController(text: '3');
   final _bathrooms = TextEditingController(text: '2');
   final _parking = TextEditingController(text: '1');
@@ -58,6 +60,8 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
     _address.dispose();
     _title.dispose();
     _priceUsd.dispose();
+    _anticreticoBob.dispose();
+    _rentMonthlyBob.dispose();
     _bedrooms.dispose();
     _bathrooms.dispose();
     _parking.dispose();
@@ -148,6 +152,23 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
     });
 
     final priceUsd = int.tryParse(_priceUsd.text.trim()) ?? 0;
+    if (priceUsd <= 0) {
+      setState(() {
+        _submitting = false;
+        _submitError =
+            'Precio inválido. Ingresa un valor en USD mayor a 0.';
+      });
+      return;
+    }
+    // year_built defensive: tryParse + bounds [1900, año actual].
+    // Antes usaba int.parse → crasheaba si el campo tenía letras/símbolos.
+    final yearBuiltRaw = int.tryParse(_yearBuilt.text.trim());
+    final currentYear = DateTime.now().year;
+    final yearBuilt = (yearBuiltRaw != null &&
+            yearBuiltRaw >= 1900 &&
+            yearBuiltRaw <= currentYear)
+        ? yearBuiltRaw
+        : null;
     final property = Property(
       id: PropertyManagementService.newPropertyId(),
       address: _address.text.trim(),
@@ -161,10 +182,8 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
       type: _type,
       listingMode: _listingMode,
       amenities: const [],
-      ageYears: _yearBuilt.text.trim().isEmpty
-          ? 0
-          : (DateTime.now().year - int.parse(_yearBuilt.text.trim()))
-              .clamp(0, 200),
+      ageYears:
+          yearBuilt == null ? 0 : (currentYear - yearBuilt).clamp(0, 200),
       photos: const [],
       cochabambaTags: const [],
       listingStatus: 'activa',
@@ -174,7 +193,9 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
       parking: int.tryParse(_parking.text.trim()) ?? 0,
       lotM2: int.tryParse(_lotM2.text.trim()),
       supportedTransactions: _supportedTransactions.toList(),
-      yearBuilt: int.tryParse(_yearBuilt.text.trim()),
+      anticreticoBob: int.tryParse(_anticreticoBob.text.trim()),
+      rentMonthlyBob: int.tryParse(_rentMonthlyBob.text.trim()),
+      yearBuilt: yearBuilt,
       listedDays: 0,
       agentName: 'María Quiroga',
     );
@@ -215,7 +236,7 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
         scrolledUnderElevation: 0,
         title: Text(
           'Nueva propiedad',
-          style: GoogleFonts.instrumentSerif(
+          style: hitoDisplay(
             fontSize: 24,
             color: HitoTokens.ink1,
           ),
@@ -675,6 +696,28 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
                 ),
             ],
           ),
+          // Campos auxiliares que aparecen solo si la modalidad correspondiente
+          // está habilitada — evita confundir al agente con inputs irrelevantes.
+          if (_supportedTransactions.contains('anticretico')) ...[
+            const SizedBox(height: 12),
+            _textField(
+              controller: _anticreticoBob,
+              label: 'Capital anticrético (BOB)',
+              hint: 'Ej. 320000',
+              keyboardType: TextInputType.number,
+              suffix: 'Bs',
+            ),
+          ],
+          if (_supportedTransactions.contains('alquiler')) ...[
+            const SizedBox(height: 4),
+            _textField(
+              controller: _rentMonthlyBob,
+              label: 'Renta mensual (BOB)',
+              hint: 'Ej. 4500',
+              keyboardType: TextInputType.number,
+              suffix: 'Bs/mes',
+            ),
+          ],
         ],
       ),
     );

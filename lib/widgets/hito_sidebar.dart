@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers.dart';
 import '../screens/contract_analysis_screen.dart';
+import '../screens/leads_inbox_screen.dart';
 import '../theme.dart';
 import 'valuation_sheet.dart';
 
@@ -16,6 +17,9 @@ class HitoSidebar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activeFlow = ref.watch(activeFlowProvider);
+    final viewMode = ref.watch(viewModeProvider);
+    final pendingLeads = ref.watch(pendingLeadsCountProvider);
+    final isAgent = viewMode == ViewMode.agent;
     return Container(
       width: width,
       color: HitoTokens.bone,
@@ -25,6 +29,21 @@ class HitoSidebar extends ConsumerWidget {
           const _LogoHeader(),
           const SizedBox(height: 16),
           const _SectionLabel(label: 'FLUJOS PRINCIPALES'),
+          if (isAgent)
+            _NavItem(
+              icon: Icons.inbox_rounded,
+              label: 'Mis leads',
+              count: pendingLeads > 0 ? '$pendingLeads' : null,
+              selected: activeFlow == HitoFlow.leads,
+              onTap: () {
+                ref.read(activeFlowProvider.notifier).set(HitoFlow.leads);
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const LeadsInboxScreen(),
+                  ),
+                );
+              },
+            ),
           _NavItem(
             icon: Icons.search_rounded,
             label: 'Matchmaking',
@@ -40,7 +59,13 @@ class HitoSidebar extends ConsumerWidget {
             onTap: () {
               ref.read(activeFlowProvider.notifier).set(HitoFlow.valuacion);
               final propertyId = _topMatchPropertyId(ref);
-              if (propertyId == null) return;
+              if (propertyId == null) {
+                _showNoSelectionSnack(
+                  context,
+                  'Seleccioná una propiedad primero — del mapa o de la lista.',
+                );
+                return;
+              }
               showModalBottomSheet<void>(
                 context: context,
                 isScrollControlled: true,
@@ -52,13 +77,18 @@ class HitoSidebar extends ConsumerWidget {
           _NavItem(
             icon: Icons.shield_outlined,
             label: 'Copiloto Legal',
-            badge: '1',
             selected: activeFlow == HitoFlow.copilotoLegal,
             onTap: () {
               ref.read(activeFlowProvider.notifier)
                   .set(HitoFlow.copilotoLegal);
               final propertyId = _topMatchPropertyId(ref);
-              if (propertyId == null) return;
+              if (propertyId == null) {
+                _showNoSelectionSnack(
+                  context,
+                  'Seleccioná una propiedad primero — del mapa o de la lista.',
+                );
+                return;
+              }
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) =>
@@ -103,57 +133,94 @@ String? _topMatchPropertyId(WidgetRef ref) {
   return matches.first.propertyId;
 }
 
+/// SnackBar consistente para flujos que requieren una propiedad seleccionada.
+void _showNoSelectionSnack(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      backgroundColor: HitoTokens.ink2,
+      duration: const Duration(seconds: 3),
+      content: Text(
+        message,
+        style: GoogleFonts.geist(color: Colors.white),
+      ),
+    ),
+  );
+}
+
 class _LogoHeader extends StatelessWidget {
   const _LogoHeader();
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: HitoTokens.teal,
-              borderRadius: BorderRadius.circular(HitoTokens.rSm),
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        decoration: BoxDecoration(
+          // Background OSCURO (ink1 navy) sobre el bone cream del sidebar —
+          // contraste real, no white-sobre-white. Da peso editorial al
+          // header de marca.
+          color: HitoTokens.ink1,
+          borderRadius: BorderRadius.circular(HitoTokens.rMd),
+          boxShadow: const [
+            BoxShadow(
+              color: Color.fromRGBO(13, 27, 42, 0.18),
+              blurRadius: 12,
+              offset: Offset(0, 4),
             ),
-            child: const Icon(
-              Icons.home_outlined,
-              color: Colors.white,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Hito',
-                  style: GoogleFonts.instrumentSerif(
-                    fontSize: 26,
-                    color: HitoTokens.ink1,
-                    height: 1.0,
-                  ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [HitoTokens.teal, HitoTokens.teal2],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'INTELIGENCIA\nINMOBILIARIA',
-                  style: GoogleFonts.geist(
-                    fontSize: 9,
-                    letterSpacing: 1.4,
-                    fontWeight: FontWeight.w500,
-                    color: HitoTokens.ink3,
-                    height: 1.3,
-                  ),
-                ),
-              ],
+                borderRadius: BorderRadius.circular(HitoTokens.rSm),
+              ),
+              child: const Icon(
+                Icons.home_outlined,
+                color: Colors.white,
+                size: 22,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hito',
+                    style: hitoDisplay(
+                      fontSize: 28,
+                      color: HitoTokens.bone, // cream sobre navy
+                      height: 1.0,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'INTELIGENCIA\nINMOBILIARIA',
+                    style: GoogleFonts.geist(
+                      fontSize: 9,
+                      letterSpacing: 1.4,
+                      fontWeight: FontWeight.w600,
+                      // Teal claro como accent para el subtítulo.
+                      color: const Color(0xFF7FCBC1),
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -166,15 +233,31 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 16, 6),
-      child: Text(
-        label,
-        style: GoogleFonts.geist(
-          fontSize: 10,
-          letterSpacing: 1.2,
-          fontWeight: FontWeight.w600,
-          color: HitoTokens.ink4,
-        ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 16, 6),
+      child: Row(
+        children: [
+          // Accent bar — da peso visual sin meter background completo.
+          Container(
+            width: 3,
+            height: 12,
+            decoration: BoxDecoration(
+              color: HitoTokens.teal,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.geist(
+                fontSize: 10,
+                letterSpacing: 1.3,
+                fontWeight: FontWeight.w700,
+                color: HitoTokens.ink3,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -184,7 +267,6 @@ class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final String? count;
-  final String? badge;
   final bool selected;
   final bool disabled;
   final VoidCallback? onTap;
@@ -193,7 +275,6 @@ class _NavItem extends StatelessWidget {
     required this.icon,
     required this.label,
     this.count,
-    this.badge,
     this.selected = false,
     this.disabled = false,
     this.onTap,
@@ -255,24 +336,6 @@ class _NavItem extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (badge != null)
-                  Container(
-                    width: 18,
-                    height: 18,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: HitoTokens.danger,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      badge!,
-                      style: GoogleFonts.geist(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -289,61 +352,95 @@ class _AgentFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: HitoTokens.paper2,
+        // paper3 (#ECE7DC) es notoriamente más oscuro que el bone (#FAF9F5)
+        // del sidebar — contraste real. Antes usaba paper (FFFFFF) que sobre
+        // bone se veía igual.
+        color: HitoTokens.paper3,
         borderRadius: BorderRadius.circular(HitoTokens.rMd),
-        border: Border.all(color: HitoTokens.border),
+        border: Border.all(color: HitoTokens.borderStrong),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: HitoTokens.teal,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              'MQ',
-              style: GoogleFonts.geist(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [HitoTokens.teal, HitoTokens.teal2],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                'MQ',
+                style: GoogleFonts.geist(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'María Quiroga',
-                  style: GoogleFonts.geist(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: HitoTokens.ink1,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'María Quiroga',
+                    style: GoogleFonts.geist(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: HitoTokens.ink1,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Agente · Plan Pro',
-                  style: GoogleFonts.geist(
-                    fontSize: 11,
-                    color: HitoTokens.ink3,
+                  const SizedBox(height: 2),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: HitoTokens.teal.withAlpha(28),
+                          borderRadius:
+                              BorderRadius.circular(HitoTokens.rXs),
+                        ),
+                        child: Text(
+                          'PRO',
+                          style: GoogleFonts.geist(
+                            fontSize: 9,
+                            letterSpacing: 0.4,
+                            fontWeight: FontWeight.w700,
+                            color: HitoTokens.teal2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Agente',
+                        style: GoogleFonts.geist(
+                          fontSize: 11,
+                          color: HitoTokens.ink3,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Icon(
-            Icons.chevron_right_rounded,
-            size: 18,
-            color: HitoTokens.ink4,
-          ),
-        ],
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: HitoTokens.ink4,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../models/contract_analysis.dart';
 import '../models/property.dart';
 import '../repositories/contract_analysis_cache_repository.dart';
+import '../repositories/seed_contract_analyses.dart';
 import 'gravamen_mock.dart';
 import 'groq_client.dart';
 
@@ -178,8 +179,16 @@ OUTPUT JSON estricto (sin markdown, solo el objeto):
 }
 ''';
 
-  /// API pública. Cache check → Groq → cache insert → return.
-  /// Funciona para cualquier `contractType`: anticretico, compraventa, alquiler.
+  /// API pública. Resolución multi-tier:
+  ///   1. **Seed pre-baked** (instant) — `assets/seed/contract_analyses.json`
+  ///      tiene análisis estáticos por (property_id, contract_type).
+  ///   2. **Cache Supabase** (~500ms) — análisis generados por LLM previamente.
+  ///   3. **Groq Llama 3.3** (~8-12s) — solo si seed y cache fallan, o si el
+  ///      usuario forzó re-análisis con `useCache: false` (típico cuando
+  ///      subió un PDF custom).
+  ///
+  /// El seed se salta cuando `useCache=false` para que "Subir PDF" siempre
+  /// dispare el LLM real sobre el texto subido.
   Future<ContractAnalysis> analyzeContract({
     required Property property,
     required String contractText,
@@ -187,6 +196,32 @@ OUTPUT JSON estricto (sin markdown, solo el objeto):
     bool useCache = true,
   }) async {
     if (useCache) {
+      // 1. Seed pre-baked — instant load para demo y para uso real cuando
+      // el agente aún no subió un PDF custom.
+      final seed = await SeedContractAnalyses.get(
+        propertyId: property.id,
+        contractType: contractType,
+      );
+      if (seed != null) {
+        debugPrint(
+          '[Hito.Contract] SEED HIT id=${property.id} type=$contractType '
+          'risk=${seed.overallRiskScore} clauses=${seed.analyzedClauses.length}',
+        );
+        // Inyectamos el contractText real (el seed no lo guarda para ahorrar
+        // espacio) para que el highlight de cláusulas funcione.
+        return ContractAnalysis(
+          contractType: seed.contractType,
+          contractText: contractText,
+          overallRiskScore: seed.overallRiskScore,
+          analyzedClauses: seed.analyzedClauses,
+          gravamenCheck: seed.gravamenCheck,
+          fraudPatternsDetected: seed.fraudPatternsDetected,
+          summary: seed.summary,
+          recommendations: seed.recommendations,
+        );
+      }
+
+      // 2. Cache Supabase
       final cached = await _cache.getLatest(
         propertyId: property.id,
         contractType: contractType,
@@ -299,11 +334,21 @@ REGLAS:
 
     // Override gravamen con el del mock (fuente de verdad — el LLM no debe
     // inventar el estado registral).
-    return ContractAnalysis.fromJson({
-      ...json,
-      'contract_text': contractText,
-      'gravamen_check': gravamen.toJson(),
-      'contract_type': (json['contract_type'] as String?) ?? declaredType,
-    });
+    try {
+      return ContractAnalysis.fromJson({
+        ...json,
+        'contract_text': contractText,
+        'gravamen_check': gravamen.toJson(),
+        'contract_type': (json['contract_type'] as String?) ?? declaredType,
+      });
+    } catch (e, stack) {
+      // Loguear el raw para diagnosticar futuras desviaciones del schema.
+      // El parser arriba ya es tolerante; si aún así falla, queremos ver qué
+      // tipo nuevo de output emitió el LLM.
+      debugPrint(
+        '[Hito.Contract] parse failed: $e\nraw LLM output:\n$raw\n$stack',
+      );
+      rethrow;
+    }
   }
 }

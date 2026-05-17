@@ -224,7 +224,7 @@ class _Header extends StatelessWidget {
             children: [
               Text(
                 'Valuación dinámica',
-                style: GoogleFonts.instrumentSerif(
+                style: hitoDisplay(
                   fontSize: 22,
                   color: HitoTokens.ink1,
                   height: 1.0,
@@ -253,25 +253,51 @@ class _ConfidencePill extends StatelessWidget {
   final double confidence;
   const _ConfidencePill({required this.confidence});
 
+  /// >=75% verde, 50-75% ámbar, <50% rojo. Antes era siempre verde — confundía
+  /// al usuario porque una valuación con 30% confianza se veía igual de OK
+  /// que una con 90%.
+  ({Color fg, Color bg, IconData icon}) _palette() {
+    if (confidence >= 0.75) {
+      return (
+        fg: HitoTokens.success,
+        bg: HitoTokens.successBg,
+        icon: Icons.verified,
+      );
+    }
+    if (confidence >= 0.5) {
+      return (
+        fg: HitoTokens.warning,
+        bg: HitoTokens.warningBg,
+        icon: Icons.warning_amber_rounded,
+      );
+    }
+    return (
+      fg: HitoTokens.danger,
+      bg: HitoTokens.dangerBg,
+      icon: Icons.error_outline_rounded,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final p = _palette();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: HitoTokens.successBg,
+        color: p.bg,
         borderRadius: BorderRadius.circular(HitoTokens.rMd),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.verified, size: 12, color: HitoTokens.success),
+          Icon(p.icon, size: 12, color: p.fg),
           const SizedBox(width: 4),
           Text(
             '${(confidence * 100).round()}% confianza',
             style: GoogleFonts.geist(
               fontSize: 10,
               fontWeight: FontWeight.w600,
-              color: HitoTokens.success,
+              color: p.fg,
             ),
           ),
         ],

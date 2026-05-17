@@ -1,12 +1,27 @@
 /// MatchResult — output de matching_service para un (propiedad, cliente).
-/// Spec en PRD §6.
+///
+/// **3-bucket categorization** (v8+): en vez de `positive_factors` y
+/// `negative_factors` el LLM ahora clasifica los hallazgos en tres niveles
+/// de severidad y accionabilidad:
+///
+///   - `recommended`: fortalezas claras de la propiedad para este cliente.
+///     Cosas que el agente puede usar como argumento de venta.
+///   - `considerations`: hechos neutros que el cliente debería verificar
+///     antes de cerrar (año de construcción medio, distancia a un colegio,
+///     mantenimiento, etc). Verde-ámbar.
+///   - `risks`: problemas serios que afectan la decisión (excede budget,
+///     muy lejos de la zona, sin parqueo cuando lo pidió, etc).
+///
+/// El backward compat con `positive_factors`/`negative_factors` se mantiene
+/// solo en el reader: si llega data vieja se mapea como recommended/risks.
 class MatchResult {
   final String propertyId;
   final String clientProfileId;
   final int compatibilityPercent; // 0-100, UI muestra "X% compatible"
   final String explanation;
-  final List<String> positiveFactors;
-  final List<String> negativeFactors;
+  final List<String> recommended;
+  final List<String> considerations;
+  final List<String> risks;
   final List<String> tagsMatched;
   final List<String> tagsMissing;
 
@@ -15,33 +30,41 @@ class MatchResult {
     required this.clientProfileId,
     required this.compatibilityPercent,
     required this.explanation,
-    required this.positiveFactors,
-    required this.negativeFactors,
-    required this.tagsMatched,
-    required this.tagsMissing,
+    this.recommended = const [],
+    this.considerations = const [],
+    this.risks = const [],
+    this.tagsMatched = const [],
+    this.tagsMissing = const [],
   });
 
-  /// Bucket de color para el marker del mapa (PRD §3.1):
-  /// >= 80 verde, 50-80 amarillo, < 50 gris.
-  String get colorBucket {
-    if (compatibilityPercent >= 80) return 'green';
-    if (compatibilityPercent >= 50) return 'amber';
-    return 'grey';
-  }
-
   factory MatchResult.fromJson(Map<String, dynamic> json) {
+    final rawCompat = json['compatibility_percent'];
+    final compat = rawCompat is num ? rawCompat.toInt().clamp(0, 100) : 0;
+
+    List<String> readList(dynamic v) =>
+        ((v as List?) ?? const []).cast<String>();
+
+    // Backward compat: si llega la data vieja (positive_factors/negative_factors),
+    // mapeamos como recommended/risks para que el render funcione mientras
+    // se invalida el cache (bump de _promptVersion).
+    final recommended = readList(json['recommended']).isNotEmpty
+        ? readList(json['recommended'])
+        : readList(json['positive_factors']);
+    final risks = readList(json['risks']).isNotEmpty
+        ? readList(json['risks'])
+        : readList(json['negative_factors']);
+    final considerations = readList(json['considerations']);
+
     return MatchResult(
       propertyId: json['property_id'] as String? ?? '',
       clientProfileId: json['client_profile_id'] as String? ?? '',
-      compatibilityPercent:
-          (json['compatibility_percent'] as num).toInt().clamp(0, 100),
+      compatibilityPercent: compat,
       explanation: json['explanation'] as String? ?? '',
-      positiveFactors:
-          (json['positive_factors'] as List? ?? []).cast<String>(),
-      negativeFactors:
-          (json['negative_factors'] as List? ?? []).cast<String>(),
-      tagsMatched: (json['tags_matched'] as List? ?? []).cast<String>(),
-      tagsMissing: (json['tags_missing'] as List? ?? []).cast<String>(),
+      recommended: recommended,
+      considerations: considerations,
+      risks: risks,
+      tagsMatched: readList(json['tags_matched']),
+      tagsMissing: readList(json['tags_missing']),
     );
   }
 
@@ -50,8 +73,9 @@ class MatchResult {
     String? clientProfileId,
     int? compatibilityPercent,
     String? explanation,
-    List<String>? positiveFactors,
-    List<String>? negativeFactors,
+    List<String>? recommended,
+    List<String>? considerations,
+    List<String>? risks,
     List<String>? tagsMatched,
     List<String>? tagsMissing,
   }) {
@@ -60,8 +84,9 @@ class MatchResult {
       clientProfileId: clientProfileId ?? this.clientProfileId,
       compatibilityPercent: compatibilityPercent ?? this.compatibilityPercent,
       explanation: explanation ?? this.explanation,
-      positiveFactors: positiveFactors ?? this.positiveFactors,
-      negativeFactors: negativeFactors ?? this.negativeFactors,
+      recommended: recommended ?? this.recommended,
+      considerations: considerations ?? this.considerations,
+      risks: risks ?? this.risks,
       tagsMatched: tagsMatched ?? this.tagsMatched,
       tagsMissing: tagsMissing ?? this.tagsMissing,
     );
@@ -72,8 +97,9 @@ class MatchResult {
         'client_profile_id': clientProfileId,
         'compatibility_percent': compatibilityPercent,
         'explanation': explanation,
-        'positive_factors': positiveFactors,
-        'negative_factors': negativeFactors,
+        'recommended': recommended,
+        'considerations': considerations,
+        'risks': risks,
         'tags_matched': tagsMatched,
         'tags_missing': tagsMissing,
       };

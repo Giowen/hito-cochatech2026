@@ -194,13 +194,30 @@ class _Details extends StatelessWidget {
           [
             if (neighborhood.isNotEmpty) neighborhood,
             '${property.bedrooms}d',
+            '${property.bathrooms}b',
             '${property.areaM2}m²',
+            if (property.parking > 0) '${property.parking}p',
           ].join(' · '),
           style: GoogleFonts.geist(
             fontSize: 11,
             color: HitoTokens.ink3,
           ),
         ),
+        // Segunda línea de metadata: año + lote cuando hay data.
+        if (property.yearBuilt != null || property.lotM2 != null) ...[
+          const SizedBox(height: 1),
+          Text(
+            [
+              if (property.yearBuilt != null) 'Año ${property.yearBuilt}',
+              if (property.lotM2 != null) 'lote ${property.lotM2}m²',
+            ].join(' · '),
+            style: GoogleFonts.geist(
+              fontSize: 10.5,
+              color: HitoTokens.ink4,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
         const SizedBox(height: 4),
         Row(
           crossAxisAlignment: CrossAxisAlignment.baseline,

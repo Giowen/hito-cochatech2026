@@ -34,7 +34,7 @@ class RoleSelectorScreen extends ConsumerWidget {
                   const SizedBox(height: 48),
                   Text(
                     '¿Cómo quieres entrar?',
-                    style: GoogleFonts.instrumentSerif(
+                    style: hitoDisplay(
                       fontSize: 32,
                       color: HitoTokens.ink2,
                       height: 1.1,
@@ -144,7 +144,7 @@ class _BrandHeader extends StatelessWidget {
         const SizedBox(height: 20),
         Text(
           'Hito',
-          style: GoogleFonts.instrumentSerif(
+          style: hitoDisplay(
             fontSize: 72,
             color: HitoTokens.ink1,
             height: 1.0,
@@ -257,7 +257,7 @@ class _RoleCardState extends State<_RoleCard> {
                 const SizedBox(height: 4),
                 Text(
                   widget.name,
-                  style: GoogleFonts.instrumentSerif(
+                  style: hitoDisplay(
                     fontSize: 40,
                     color: HitoTokens.ink1,
                     height: 1.0,

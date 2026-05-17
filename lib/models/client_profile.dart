@@ -43,7 +43,17 @@ class ClientProfile {
   ///   v4: compra↔venta normalization + budget extraction fixes
   ///   v5: HECHOS verificados en user prompt + anti-hallucination rules
   ///   v6: effectivePriceBob para anticretico (no usar priceBob de venta)
-  static const _promptVersion = 'v6';
+  ///   v7: prohibición explícita de tags inventados (familia/seguridad/jardín
+  ///       /piscina/quincho/etc) si no fueron pedidos. Filtro client-side
+  ///       extendido y endurecido.
+  ///   v8: temperature=0.0 + tiebreaker determinístico post-LLM (median del
+  ///       grupo + bonus por año/área/parqueo/precio).
+  ///   v9: clasificación en 3 buckets (recommended/considerations/risks)
+  ///       en vez de positive/negative. Más jerarquía visual + accionable.
+  ///   v10: filtro extendido (no cumple con/no se menciona/no confirma),
+  ///       fingerprint coarse para tiebreaker, regla parqueos explícita,
+  ///       considerations debe quedar vacía si no hay nada honesto.
+  static const _promptVersion = 'v10';
 
   /// Hash determinístico de los campos que afectan la decisión de matching.
   /// Incluye `_promptVersion` para invalidar cache cuando cambia el prompt.

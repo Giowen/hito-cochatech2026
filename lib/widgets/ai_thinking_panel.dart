@@ -6,6 +6,7 @@ import '../models/match_result.dart';
 import '../models/property.dart';
 import '../providers.dart';
 import '../theme.dart';
+import '../utils/tc_paralelo.dart';
 
 /// AiThinkingPanel — panel lateral derecho que muestra el pipeline de la IA
 /// en vivo: interpretación de criterios, filtrado, scoring, explicación.
@@ -84,72 +85,100 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: HitoTokens.teal,
-            borderRadius: BorderRadius.circular(HitoTokens.rMd),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        // ink1 (navy) — match con el logo header del sidebar para consistencia.
+        // Sobre el bone del panel da contraste alto y peso editorial.
+        color: HitoTokens.ink1,
+        borderRadius: BorderRadius.circular(HitoTokens.rMd),
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(13, 27, 42, 0.18),
+            blurRadius: 12,
+            offset: Offset(0, 4),
           ),
-          child: Icon(
-            isLoading
-                ? Icons.auto_awesome
-                : isDone
-                    ? Icons.check_rounded
-                    : Icons.auto_awesome,
-            color: Colors.white,
-            size: 18,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Hito IA',
-                style: GoogleFonts.instrumentSerif(
-                  fontSize: 22,
-                  color: HitoTokens.ink1,
-                  height: 1.0,
-                ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [HitoTokens.teal, HitoTokens.teal2],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  if (isLoading)
-                    const SizedBox(
-                      width: 10,
-                      height: 10,
-                      child: CircularProgressIndicator(strokeWidth: 1.5),
-                    )
-                  else if (isDone)
-                    Icon(Icons.verified_rounded,
-                        size: 12, color: HitoTokens.success)
-                  else
-                    Icon(Icons.circle_outlined,
-                        size: 12, color: HitoTokens.ink4),
-                  const SizedBox(width: 6),
-                  Text(
-                    isLoading
-                        ? 'Pensando...'
-                        : isDone
-                            ? 'Análisis completo · $propCount propiedades'
-                            : 'Esperando tu búsqueda',
-                    style: GoogleFonts.geist(
-                      fontSize: 11,
-                      color: HitoTokens.ink3,
-                    ),
+              borderRadius: BorderRadius.circular(HitoTokens.rMd),
+            ),
+            child: Icon(
+              isLoading
+                  ? Icons.auto_awesome
+                  : isDone
+                      ? Icons.check_rounded
+                      : Icons.auto_awesome,
+              color: Colors.white,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Hito IA',
+                  style: hitoDisplay(
+                    fontSize: 24,
+                    color: HitoTokens.bone, // cream sobre navy
+                    height: 1.0,
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    if (isLoading)
+                      const SizedBox(
+                        width: 10,
+                        height: 10,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: Color(0xFF7FCBC1),
+                        ),
+                      )
+                    else if (isDone)
+                      const Icon(Icons.verified_rounded,
+                          size: 12, color: Color(0xFF7FCBC1))
+                    else
+                      const Icon(Icons.circle_outlined,
+                          size: 12, color: Color(0xFFA0AEC0)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        isLoading
+                            ? 'Pensando...'
+                            : isDone
+                                ? 'Análisis completo · $propCount propiedades'
+                                : 'Esperando tu búsqueda',
+                        style: GoogleFonts.geist(
+                          fontSize: 11,
+                          // Texto secundario en tono claro suave para legibilidad.
+                          color: const Color(0xFFA0AEC0),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -279,7 +308,7 @@ class _PipelineSteps extends StatelessWidget {
     if (profile.minBedrooms != null && profile.minBedrooms > 0) {
       parts.add('${profile.minBedrooms}+ dorm');
     }
-    final usdMax = profile.budgetMax / 12.20;
+    final usdMax = profile.budgetMax / TcParalelo.rate;
     if (usdMax > 0) {
       parts.add('máx \$${(usdMax / 1000).toStringAsFixed(0)}k USD');
     }

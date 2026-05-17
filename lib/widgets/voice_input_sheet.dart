@@ -1,11 +1,16 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../models/client_profile.dart';
+import '../models/lead.dart';
 import '../providers.dart';
 import '../theme.dart';
+import '../utils/tc_paralelo.dart';
+import 'top_banner.dart';
 
 /// VoiceInputSheet — captura voz del usuario, transcribe con Whisper (Groq),
 /// extrae perfil estructurado con Llama 3.3, y aplica a clientProfileProvider.
@@ -46,10 +51,13 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
         });
         return;
       }
-      await _audioRecorder.start(
-        const RecordConfig(),
-        path: 'hito_profile_input.m4a',
-      );
+      // En Web `path` es ignorado (devuelve blob:); en mobile/desktop debe
+      // ser ruta absoluta a un directorio writable. Antes usaba ruta
+      // relativa "hito_profile_input.m4a" que falla en algunos dispositivos.
+      final path = kIsWeb
+          ? 'hito_profile_input.m4a'
+          : '${(await getTemporaryDirectory()).path}/hito_profile_input.m4a';
+      await _audioRecorder.start(const RecordConfig(), path: path);
       setState(() {
         _state = _SheetState.recording;
         _transcription = '';
@@ -122,11 +130,55 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     }
   }
 
-  void _applyProfile() {
+  Future<void> _applyProfile() async {
     if (_extractedProfile == null) return;
     ref.read(clientProfileProvider.notifier).update(_extractedProfile!);
     ref.invalidate(matchResultsProvider);
+
+    // Si está en vista cliente, esta voice query crea un lead en el inbox
+    // del agente — el flujo "ecosistema dual" del desafío. Si está en vista
+    // agente buscando inventario propio, no creamos lead (sería ruido).
+    final viewMode = ref.read(viewModeProvider);
+    final isClient = viewMode == ViewMode.client;
+    if (isClient) {
+      final shareSource = ref.read(shareLinkOriginProvider);
+      // ignore: discarded_futures
+      ref.read(leadsProvider.notifier).addFromVoice(
+            profile: _extractedProfile!,
+            source: shareSource ? LeadSource.shareLink : LeadSource.organic,
+          );
+    }
+
+    // Capturar la referencia al overlay ANTES del pop. Después del pop, el
+    // context del sheet queda muerto, pero el OverlayState del root nav
+    // sigue vivo.
+    final rootNav = Navigator.of(context, rootNavigator: true);
+    final overlayState = rootNav.overlay;
+
     Navigator.of(context).pop();
+
+    if (isClient && overlayState != null) {
+      // Insertar el banner directamente en el overlay capturado, sin pasar
+      // por TopBanner.show (que necesita un context vivo). Usamos el mismo
+      // OverlayEntry pattern.
+      _showBannerOnOverlay(
+        overlayState,
+        message: 'Tu búsqueda se envió a María. Te contactará pronto.',
+        icon: Icons.send_rounded,
+      );
+    }
+  }
+
+  /// Inserta el banner usando un OverlayState ya resuelto. Evita race
+  /// condition de `Overlay.of(context)` después de un pop.
+  void _showBannerOnOverlay(
+    OverlayState overlay, {
+    required String message,
+    required IconData icon,
+  }) {
+    // Reusa TopBanner.show pasando el context del overlay (es válido por
+    // estar dentro del subtree de Overlay). TopBanner se encarga del resto.
+    TopBanner.show(overlay.context, message: message, icon: icon);
   }
 
   void _reset() {
@@ -157,7 +209,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
                 Expanded(
                   child: Text(
                     '¿Qué casa estás buscando?',
-                    style: GoogleFonts.instrumentSerif(
+                    style: hitoDisplay(
                       fontSize: 24,
                       color: HitoTokens.ink1,
                       height: 1.1,
@@ -396,7 +448,7 @@ class _ProfilePreview extends StatelessWidget {
           _row(
             context,
             Icons.attach_money_rounded,
-            'Presupuesto: hasta \$${(profile.budgetMax / 1000 / 12.20).toStringAsFixed(0)}k USD',
+            'Presupuesto: hasta \$${(profile.budgetMax / 1000 / TcParalelo.rate).toStringAsFixed(0)}k USD',
           ),
           _row(
             context,

@@ -47,18 +47,28 @@ class SupabaseMatchCacheRepository implements MatchCacheRepository {
           .limit(1);
       if (rows.isEmpty) return null;
       final row = rows.first;
-      return MatchResult(
-        propertyId: row['property_id'] as String,
-        clientProfileId: '',
-        compatibilityPercent: (row['compatibility_percent'] as num).toInt(),
-        explanation: row['explanation'] as String? ?? '',
-        positiveFactors:
-            ((row['positive_factors'] as List?) ?? const []).cast<String>(),
-        negativeFactors:
-            ((row['negative_factors'] as List?) ?? const []).cast<String>(),
-        tagsMatched: ((row['tags_matched'] as List?) ?? const []).cast<String>(),
-        tagsMissing: ((row['tags_missing'] as List?) ?? const []).cast<String>(),
-      );
+      List<String> readList(dynamic v) =>
+          ((v as List?) ?? const []).cast<String>();
+
+      // v9 schema: el cache puede tener filas con considerations/risks
+      // (columnas nuevas) o filas viejas con positive_factors/negative_factors.
+      // MatchResult.fromJson hace el backward compat — usamos esa misma lógica.
+      return MatchResult.fromJson({
+        'property_id': row['property_id'],
+        'client_profile_id': '',
+        'compatibility_percent':
+            (row['compatibility_percent'] as num?)?.toInt() ?? 0,
+        'explanation': row['explanation'] as String? ?? '',
+        // Columnas nuevas (post v9) si existen, si no fallback a las viejas
+        // vía fromJson.
+        'recommended': readList(row['recommended']),
+        'considerations': readList(row['considerations']),
+        'risks': readList(row['risks']),
+        'positive_factors': readList(row['positive_factors']),
+        'negative_factors': readList(row['negative_factors']),
+        'tags_matched': readList(row['tags_matched']),
+        'tags_missing': readList(row['tags_missing']),
+      });
     } catch (e) {
       debugPrint('[Hito.MatchCache] get failed: $e');
       return null;
@@ -81,8 +91,14 @@ class SupabaseMatchCacheRepository implements MatchCacheRepository {
           'profile_json': profileJson,
           'compatibility_percent': result.compatibilityPercent,
           'explanation': result.explanation,
-          'positive_factors': result.positiveFactors,
-          'negative_factors': result.negativeFactors,
+          // Escribimos también las viejas para que filas v9 puedan ser leídas
+          // por código v8 si rolleamos. recommended/risks como
+          // positive_factors/negative_factors para back-compat; considerations
+          // va aparte (si la columna existe; si no, Supabase la ignora con
+          // schema mismatch — pero Postgres NO la ignora, tira error. Mejor
+          // omitir esa columna nueva en escritura hasta que esté en schema).
+          'positive_factors': result.recommended,
+          'negative_factors': result.risks,
           'tags_matched': result.tagsMatched,
           'tags_missing': result.tagsMissing,
           'llm_model': llmModel,

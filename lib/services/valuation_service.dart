@@ -45,7 +45,7 @@ CONTEXTO MACRO obligatorio:
 - Costos de construcción al alza por inflación de insumos importados.
 - Plusvalía zonal típica anual: Cala Cala +6-8%, Recoleta +5%, Queru Queru
   +4-5%, Sarco +3%, periferia +2-3%.
-- Año de construcción importa: <5 años premium +5%, >25 años -5% a -10%.
+- Antigüedad importa: año <5 → premium +5%, año >25 → -5% a -10%.
 
 Te entregan una propiedad target + 5 comparables del mismo tipo. Estima
 valor justo de mercado para 2026 considerando TC paralelo.
@@ -58,14 +58,14 @@ Devuelve JSON estricto (sin markdown):
   "confidence_score": float entre 0 y 1,
   "factors": [
     strings formateados como "+8.2% Ubicación (Cala Cala)" o
-    "-2.1% Sin patio" — máximo 6 ítems
+    "+3.0% Año 2021 (nueva)" o "-2.5% Año 2008 (antigua)" — máximo 6 ítems
   ],
   "recommendation_for_agent": string max 60 palabras, tono asesor al
     propietario/agente sobre estrategia de precio y timing,
   "recommendation_for_client": string max 60 palabras, tono asesor al
     comprador sobre margen de negociación,
-  "reasoning": string max 70 palabras citando 2-3 comparables y los
-    ajustes aplicados (zona, año, área, etc.)
+  "reasoning": string max 70 palabras citando 2-3 comparables POR DIRECCIÓN
+    O TÍTULO (NUNCA por id "p01"/"p03") y los ajustes aplicados.
 }
 
 REGLAS:
@@ -73,6 +73,13 @@ REGLAS:
 - Si listed > estimate por más de 5%, recomendación enfatiza sobrevalor.
 - Si listed < estimate por más de 5%, recomendación enfatiza oportunidad.
 - Los valores en BOB son enteros, sin separadores.
+- Para referirte a la antigüedad de las propiedades en factors y reasoning
+  USA "año YYYY" (ej. "Año 2018"). PROHIBIDO usar "edad X años" o
+  "X años de antigüedad" — siempre en formato año-de-construcción.
+- En reasoning JAMÁS cites los IDs internos (p01, p02, etc). Usa SIEMPRE
+  la dirección, título o calle del comparable (ej. "el comparable de
+  Av. Pando", "la casa de Ladislao Cabrera"). El jurado/cliente NO debe
+  ver nuestros IDs internos.
 - No incluyas texto fuera del JSON.
 ''';
 
@@ -154,10 +161,13 @@ REGLAS:
   // ── Internals ───────────────────────────────────────────────────────────
 
   String _buildUserPrompt(Property target, List<Property> comparables) {
+    // OJO: NO incluimos el `id` interno de los comparables — el LLM no debe
+    // verlo para que sea imposible que lo cite en el reasoning. En vez de id
+    // usa address/title que son human-readable.
     final compsJson = comparables.map((c) {
       return {
-        'id': c.id,
-        'address': c.address,
+        'titulo': c.title ?? c.address,
+        'direccion': c.address,
         'neighborhood': c.neighborhood,
         'price_bob': c.priceBob,
         'price_usd_paralelo': c.priceUsdParalelo,
@@ -171,7 +181,12 @@ REGLAS:
       };
     }).toList();
 
-    return 'PROPIEDAD TARGET:\n${jsonEncode(target.toJson())}\n\n'
+    // Tampoco enviamos el ID del target en la serialización completa — usamos
+    // una versión limpia para el prompt.
+    final targetClean = Map<String, dynamic>.from(target.toJson())
+      ..remove('id');
+
+    return 'PROPIEDAD TARGET:\n${jsonEncode(targetClean)}\n\n'
         'COMPARABLES (${comparables.length} propiedades similares):\n'
         '${jsonEncode(compsJson)}\n\n'
         'TC paralelo asumido: ${TcParalelo.rate} BOB/USD';

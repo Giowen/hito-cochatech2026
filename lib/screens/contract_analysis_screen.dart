@@ -1,8 +1,12 @@
+import 'dart:async';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/contract_analysis.dart';
 import '../providers.dart';
+import '../services/pdf_text_extractor.dart';
 import '../theme.dart';
 
 /// "Tu Copiloto Legal Inmobiliario" — Acto 3 del pitch.
@@ -26,7 +30,17 @@ class _ContractAnalysisScreenState
   bool _generating = false;
   String? _generateError;
 
+  // ── Estado de "análisis de PDF subido" ──────────────────────────
+  ContractAnalysis? _uploadedAnalysis;
+  /// Hasta cuántas cláusulas mostrar mientras animamos el reveal progresivo.
+  /// Cuando == analyzedClauses.length terminó.
+  int _revealedClauses = 0;
+  bool _analyzingUpload = false;
+  String? _uploadError;
+  String? _uploadFileName;
+
   bool get _showingDraft => _draft != null;
+  bool get _showingUploaded => _uploadedAnalysis != null;
 
   Future<void> _openTypePicker() async {
     if (_generating) return;
@@ -82,6 +96,95 @@ class _ContractAnalysisScreenState
       _draft = null;
       _draftType = null;
       _generateError = null;
+      _uploadedAnalysis = null;
+      _uploadFileName = null;
+      _uploadError = null;
+      _revealedClauses = 0;
+    });
+  }
+
+  /// Flow: file_picker → bytes → extraer texto → analyzeContract con
+  /// useCache=false (saltea el seed; queremos análisis fresco del PDF subido)
+  /// → revealar cláusulas una por una con animación.
+  Future<void> _pickAndAnalyzePdf() async {
+    if (_analyzingUpload) return;
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty || !mounted) return;
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      setState(() {
+        _uploadError = 'No se pudo leer el archivo. Probá de nuevo.';
+      });
+      return;
+    }
+
+    setState(() {
+      _analyzingUpload = true;
+      _uploadError = null;
+      _uploadedAnalysis = null;
+      _revealedClauses = 0;
+      _uploadFileName = file.name;
+      _draft = null;
+      _draftType = null;
+    });
+
+    try {
+      final text = await HitoPdfExtractor.extract(bytes);
+      if (text.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _analyzingUpload = false;
+          _uploadError =
+              'No se pudo extraer texto. El PDF puede estar escaneado (sin OCR) o protegido.';
+        });
+        return;
+      }
+
+      final propertiesAsync = ref.read(propertiesProvider);
+      final properties = propertiesAsync.value;
+      final property = properties == null
+          ? null
+          : {for (final p in properties) p.id: p}[widget.propertyId];
+      if (property == null) {
+        throw StateError('Property ${widget.propertyId} no encontrada');
+      }
+
+      final service = ref.read(contractAnalysisServiceProvider);
+      final analysis = await service.analyzeContract(
+        property: property,
+        contractText: text,
+        contractType: 'anticretico',
+        useCache: false, // saltea seed y cache — queremos análisis fresco del PDF
+      );
+      if (!mounted) return;
+      setState(() {
+        _uploadedAnalysis = analysis;
+        _analyzingUpload = false;
+      });
+      _revealClausesProgressive(analysis.analyzedClauses.length);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _analyzingUpload = false;
+        _uploadError = 'Error analizando PDF: $e';
+      });
+    }
+  }
+
+  /// Revelado progresivo: muestra cada cláusula con 350ms de delay para
+  /// dar sensación de "AI procesando una por una".
+  void _revealClausesProgressive(int total) {
+    Future<void>.delayed(const Duration(milliseconds: 200), () async {
+      for (var i = 1; i <= total; i++) {
+        if (!mounted || _uploadedAnalysis == null) return;
+        setState(() => _revealedClauses = i);
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+      }
     });
   }
 
@@ -95,8 +198,12 @@ class _ContractAnalysisScreenState
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          _showingDraft ? 'Borrador AI' : 'Tu Copiloto Legal',
-          style: GoogleFonts.instrumentSerif(
+          _showingDraft
+              ? 'Borrador AI'
+              : _showingUploaded
+                  ? 'Análisis de PDF'
+                  : 'Tu Copiloto Legal',
+          style: hitoDisplay(
             fontSize: 22,
             color: HitoTokens.ink1,
             height: 1.0,
@@ -107,7 +214,7 @@ class _ContractAnalysisScreenState
         elevation: 0,
         scrolledUnderElevation: 0,
         actions: [
-          if (_showingDraft)
+          if (_showingDraft || _showingUploaded)
             TextButton.icon(
               onPressed: _backToAnalysis,
               icon: const Icon(Icons.arrow_back, size: 16),
@@ -119,7 +226,37 @@ class _ContractAnalysisScreenState
                 ),
               ),
             )
-          else
+          else ...[
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: TextButton.icon(
+                onPressed: _analyzingUpload ? null : _pickAndAnalyzePdf,
+                style: TextButton.styleFrom(
+                  foregroundColor: HitoTokens.teal,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                ),
+                icon: _analyzingUpload
+                    ? SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          color: HitoTokens.teal,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.upload_file_outlined, size: 16),
+                label: Text(
+                  _analyzingUpload ? 'Analizando…' : 'Subir PDF',
+                  style: GoogleFonts.geist(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: FilledButton.icon(
@@ -150,6 +287,7 @@ class _ContractAnalysisScreenState
                 ),
               ),
             ),
+          ],
         ],
       ),
       body: _buildBody(),
@@ -178,6 +316,28 @@ class _ContractAnalysisScreenState
       );
     }
 
+    if (_uploadError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.warning_amber_rounded,
+                  size: 36, color: HitoTokens.warning),
+              const SizedBox(height: 8),
+              Text(_uploadError!, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: _pickAndAnalyzePdf,
+                child: const Text('Subir otro PDF'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (_generating) {
       return Center(
         child: Column(
@@ -197,6 +357,10 @@ class _ContractAnalysisScreenState
       );
     }
 
+    if (_analyzingUpload) {
+      return _UploadAnalyzingSkeleton(fileName: _uploadFileName ?? 'contrato.pdf');
+    }
+
     if (_showingDraft) {
       return _AnalysisBody(
         analysis: _draft!,
@@ -205,9 +369,27 @@ class _ContractAnalysisScreenState
       );
     }
 
+    if (_showingUploaded) {
+      final clauses = _uploadedAnalysis!.analyzedClauses;
+      final partial = clauses.take(_revealedClauses).toList();
+      // Mostramos el análisis completo cuando termina el reveal; durante el
+      // reveal, una versión parcial con clauses incompletas.
+      final visible = _revealedClauses >= clauses.length
+          ? _uploadedAnalysis!
+          : _uploadedAnalysis!.copyWithClauses(partial);
+      return _AnalysisBody(
+        analysis: visible,
+        isDraft: false,
+        uploadFileName: _uploadFileName,
+        revealing: _revealedClauses < clauses.length,
+        revealedCount: _revealedClauses,
+        totalClauses: clauses.length,
+      );
+    }
+
     final analysisAsync = ref.watch(contractAnalysisProvider(widget.propertyId));
     return analysisAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const _CopilotoLoadingSkeleton(),
       error: (e, _) => Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -233,7 +415,7 @@ class _ContractTypePicker extends StatelessWidget {
           children: [
             Text(
               'Generar borrador',
-              style: GoogleFonts.instrumentSerif(
+              style: hitoDisplay(
                 fontSize: 22,
                 color: HitoTokens.ink1,
               ),
@@ -361,11 +543,19 @@ class _AnalysisBody extends StatelessWidget {
   final ContractAnalysis analysis;
   final bool isDraft;
   final String? draftType;
+  final String? uploadFileName;
+  final bool revealing;
+  final int revealedCount;
+  final int totalClauses;
 
   const _AnalysisBody({
     required this.analysis,
     required this.isDraft,
     this.draftType,
+    this.uploadFileName,
+    this.revealing = false,
+    this.revealedCount = 0,
+    this.totalClauses = 0,
   });
 
   int _countByLevel(RiskLevel level) =>
@@ -384,6 +574,15 @@ class _AnalysisBody extends StatelessWidget {
         children: [
           if (isDraft) _DraftBanner(contractType: draftType ?? 'contrato'),
           if (isDraft) const SizedBox(height: 12),
+          if (uploadFileName != null) ...[
+            _UploadedBanner(
+              fileName: uploadFileName!,
+              revealing: revealing,
+              revealedCount: revealedCount,
+              total: totalClauses,
+            ),
+            const SizedBox(height: 12),
+          ],
           _HeaderCard(
             contractType: analysis.contractType,
             isDraft: isDraft,
@@ -643,7 +842,7 @@ class _RiskScorePanel extends StatelessWidget {
                 children: [
                   Text(
                     (score / 10).toStringAsFixed(1),
-                    style: GoogleFonts.instrumentSerif(
+                    style: hitoDisplay(
                       fontSize: 36,
                       color: color,
                       height: 1.0,
@@ -851,13 +1050,30 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _HighlightedContractView extends StatelessWidget {
+/// Render del contrato con cláusulas highlighted. Cachea los spans para no
+/// recalcular en cada build — antes el fuzzy matching O(N*M) corría cada
+/// rebuild del widget (~32M ops para 13 cláusulas x 5000 chars) y freezaba
+/// la UI haciendo parecer que la app colgó.
+class _HighlightedContractView extends StatefulWidget {
   final String contractText;
   final List<AnalyzedClause> clauses;
   const _HighlightedContractView({
     required this.contractText,
     required this.clauses,
   });
+
+  @override
+  State<_HighlightedContractView> createState() =>
+      _HighlightedContractViewState();
+}
+
+class _HighlightedContractViewState extends State<_HighlightedContractView> {
+  static final _wsRe = RegExp(r'\s+');
+
+  List<TextSpan>? _cachedSpans;
+  // Identidad-clave para invalidar el cache cuando cambian los inputs.
+  int? _lastContractHash;
+  int? _lastClausesHash;
 
   Color _bgFor(RiskLevel level) {
     switch (level) {
@@ -870,28 +1086,91 @@ class _HighlightedContractView extends StatelessWidget {
     }
   }
 
+  static String _normalize(String s) =>
+      s.toLowerCase().replaceAll(_wsRe, ' ').trim();
+
+  /// Busca [needle] en [haystack]. Estrategia escalada por costo:
+  ///   1. `indexOf` exacto (O(N+M), nativo) — funciona para SEED contracts
+  ///      donde la cláusula es cita literal del texto.
+  ///   2. Fallback fuzzy con normalización (solo si exacto falla) —
+  ///      cubre el caso del LLM que cita con comillas/espacios distintos.
+  ///
+  /// Devuelve (start, end) en coords del haystack original o null.
+  (int, int)? _findClauseRange(String haystack, String needle) {
+    if (needle.isEmpty) return null;
+    // Fast path: exact match. Para SEED contracts esto siempre acierta.
+    final exact = haystack.indexOf(needle);
+    if (exact >= 0) return (exact, exact + needle.length);
+
+    // Slow path: normalized fuzzy.
+    final hNorm = _normalize(haystack);
+    final nNorm = _normalize(needle);
+    if (nNorm.isEmpty) return null;
+    final idxNorm = hNorm.indexOf(nNorm);
+    if (idxNorm < 0) return null;
+
+    int orig = 0;
+    int norm = 0;
+    while (orig < haystack.length && norm < idxNorm) {
+      final c = haystack[orig];
+      if (_wsRe.hasMatch(c)) {
+        while (orig < haystack.length && _wsRe.hasMatch(haystack[orig])) {
+          orig++;
+        }
+        norm++;
+      } else {
+        orig++;
+        norm++;
+      }
+    }
+    final start = orig;
+    int endNorm = 0;
+    int end = start;
+    while (end < haystack.length && endNorm < nNorm.length) {
+      final c = haystack[end];
+      if (_wsRe.hasMatch(c)) {
+        while (end < haystack.length && _wsRe.hasMatch(haystack[end])) {
+          end++;
+        }
+        endNorm++;
+      } else {
+        end++;
+        endNorm++;
+      }
+    }
+    return (start, end);
+  }
+
   List<TextSpan> _buildSpans() {
     final positions = <_Span>[];
-    for (final clause in clauses) {
-      final idx = contractText.indexOf(clause.clauseText);
-      if (idx >= 0) {
+    for (final clause in widget.clauses) {
+      final range = _findClauseRange(widget.contractText, clause.clauseText);
+      if (range != null) {
         positions.add(_Span(
-          start: idx,
-          end: idx + clause.clauseText.length,
+          start: range.$1,
+          end: range.$2,
           clause: clause,
         ));
       }
     }
     positions.sort((a, b) => a.start.compareTo(b.start));
 
+    final nonOverlap = <_Span>[];
+    for (final pos in positions) {
+      if (nonOverlap.isEmpty || pos.start >= nonOverlap.last.end) {
+        nonOverlap.add(pos);
+      }
+    }
+
     final spans = <TextSpan>[];
     int cursor = 0;
-    for (final pos in positions) {
+    for (final pos in nonOverlap) {
       if (pos.start > cursor) {
-        spans.add(TextSpan(text: contractText.substring(cursor, pos.start)));
+        spans.add(
+            TextSpan(text: widget.contractText.substring(cursor, pos.start)));
       }
       spans.add(TextSpan(
-        text: contractText.substring(pos.start, pos.end),
+        text: widget.contractText.substring(pos.start, pos.end),
         style: TextStyle(
           backgroundColor: _bgFor(pos.clause.riskLevel),
           fontWeight: FontWeight.w500,
@@ -899,14 +1178,24 @@ class _HighlightedContractView extends StatelessWidget {
       ));
       cursor = pos.end;
     }
-    if (cursor < contractText.length) {
-      spans.add(TextSpan(text: contractText.substring(cursor)));
+    if (cursor < widget.contractText.length) {
+      spans.add(TextSpan(text: widget.contractText.substring(cursor)));
     }
     return spans;
   }
 
   @override
   Widget build(BuildContext context) {
+    // Recalcular spans solo cuando cambian inputs (no en cada rebuild).
+    final contractHash = widget.contractText.hashCode;
+    final clausesHash = Object.hashAll(widget.clauses.map((c) => c.clauseText));
+    if (_cachedSpans == null ||
+        _lastContractHash != contractHash ||
+        _lastClausesHash != clausesHash) {
+      _cachedSpans = _buildSpans();
+      _lastContractHash = contractHash;
+      _lastClausesHash = clausesHash;
+    }
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -923,7 +1212,7 @@ class _HighlightedContractView extends StatelessWidget {
               color: HitoTokens.ink2,
               height: 1.7,
             ),
-            children: _buildSpans(),
+            children: _cachedSpans!,
           ),
         ),
       ),
@@ -1098,6 +1387,344 @@ class _BulletItem extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Banner que se muestra cuando el análisis vino de un PDF subido por el
+/// usuario, con un contador "leyendo cláusula X de Y" durante el reveal.
+class _UploadedBanner extends StatelessWidget {
+  final String fileName;
+  final bool revealing;
+  final int revealedCount;
+  final int total;
+  const _UploadedBanner({
+    required this.fileName,
+    required this.revealing,
+    required this.revealedCount,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: HitoTokens.navy.withAlpha(15),
+        borderRadius: BorderRadius.circular(HitoTokens.rMd),
+        border: Border.all(color: HitoTokens.navy.withAlpha(80)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.upload_file_rounded, color: HitoTokens.navy, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'PDF SUBIDO · $fileName',
+                  style: GoogleFonts.geist(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: HitoTokens.navy,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                Text(
+                  revealing
+                      ? 'Procesando cláusula $revealedCount de $total…'
+                      : 'Análisis completo · $total cláusulas evaluadas',
+                  style: GoogleFonts.geist(
+                    fontSize: 11,
+                    color: HitoTokens.ink3,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (revealing)
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Pantalla full-screen mientras Groq analiza un PDF recién subido.
+/// Skeleton de cards de cláusulas + mensajes rotativos del pipeline.
+class _UploadAnalyzingSkeleton extends StatefulWidget {
+  final String fileName;
+  const _UploadAnalyzingSkeleton({required this.fileName});
+
+  @override
+  State<_UploadAnalyzingSkeleton> createState() =>
+      _UploadAnalyzingSkeletonState();
+}
+
+class _UploadAnalyzingSkeletonState extends State<_UploadAnalyzingSkeleton>
+    with SingleTickerProviderStateMixin {
+  static const _messages = [
+    'Extrayendo texto del PDF…',
+    'Identificando cláusulas y partes del contrato…',
+    'Cruzando con Código Civil boliviano (arts. 1429-1438)…',
+    'Detectando patrones de fraude documental…',
+    'Verificando estado registral en Derechos Reales…',
+    'Calculando score de riesgo ponderado…',
+    'Redactando recomendaciones accionables…',
+  ];
+  int _index = 0;
+  Timer? _timer;
+  late AnimationController _shimmer;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmer = AnimationController(
+      duration: const Duration(milliseconds: 1300),
+      vsync: this,
+    )..repeat();
+    _timer = Timer.periodic(const Duration(milliseconds: 1800), (_) {
+      if (!mounted) return;
+      setState(() => _index = (_index + 1) % _messages.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _shimmer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: HitoTokens.teal.withAlpha(15),
+              borderRadius: BorderRadius.circular(HitoTokens.rLg),
+              border: Border.all(color: HitoTokens.teal.withAlpha(80)),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: HitoTokens.teal,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ANALIZANDO ${widget.fileName}',
+                        style: GoogleFonts.geist(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: HitoTokens.teal2,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: Text(
+                          _messages[_index],
+                          key: ValueKey(_index),
+                          style: GoogleFonts.geist(
+                            fontSize: 12.5,
+                            color: HitoTokens.ink1,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          _SkeletonBlock(shimmer: _shimmer, height: 90),
+          const SizedBox(height: 14),
+          _SkeletonBlock(shimmer: _shimmer, height: 60),
+          const SizedBox(height: 18),
+          for (var i = 0; i < 5; i++) ...[
+            _SkeletonClauseCard(shimmer: _shimmer),
+            const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Skeleton para el flow de seed/cache-hit que no debería tardar pero que
+/// si tarda (ej. demora de Supabase) muestra un placeholder con shimmer.
+class _CopilotoLoadingSkeleton extends StatefulWidget {
+  const _CopilotoLoadingSkeleton();
+
+  @override
+  State<_CopilotoLoadingSkeleton> createState() =>
+      _CopilotoLoadingSkeletonState();
+}
+
+class _CopilotoLoadingSkeletonState extends State<_CopilotoLoadingSkeleton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmer;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmer = AnimationController(
+      duration: const Duration(milliseconds: 1300),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _shimmer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SkeletonBlock(shimmer: _shimmer, height: 72),
+          const SizedBox(height: 14),
+          _SkeletonBlock(shimmer: _shimmer, height: 88),
+          const SizedBox(height: 18),
+          for (var i = 0; i < 4; i++) ...[
+            _SkeletonClauseCard(shimmer: _shimmer),
+            const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonBlock extends StatelessWidget {
+  final AnimationController shimmer;
+  final double height;
+  const _SkeletonBlock({required this.shimmer, required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: shimmer,
+      builder: (context, _) {
+        final t = shimmer.value;
+        return Container(
+          height: height,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(-1 + 2 * t, 0),
+              end: Alignment(0 + 2 * t, 0),
+              colors: [
+                HitoTokens.paper3,
+                HitoTokens.paper,
+                HitoTokens.paper3,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(HitoTokens.rLg),
+            border: Border.all(color: HitoTokens.border),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SkeletonClauseCard extends StatelessWidget {
+  final AnimationController shimmer;
+  const _SkeletonClauseCard({required this.shimmer});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        return AnimatedBuilder(
+          animation: shimmer,
+          builder: (context, _) {
+            final t = shimmer.value;
+            // Pre-calculamos width absoluto en vez de usar FractionallySizedBox
+            // (que rompe dentro de Row porque queda sin constraint horizontal).
+            Widget bar({required double widthFactor, double height = 10}) {
+              return Container(
+                width: w * widthFactor,
+                height: height,
+                margin: const EdgeInsets.symmetric(vertical: 3),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment(-1 + 2 * t, 0),
+                    end: Alignment(0 + 2 * t, 0),
+                    colors: [
+                      HitoTokens.paper3,
+                      HitoTokens.paper,
+                      HitoTokens.paper3,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              );
+            }
+
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: HitoTokens.paper,
+                border: Border.all(color: HitoTokens.border),
+                borderRadius: BorderRadius.circular(HitoTokens.rMd),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: HitoTokens.paper3,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      bar(widthFactor: 0.22, height: 8),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  bar(widthFactor: 0.95),
+                  bar(widthFactor: 0.85),
+                  bar(widthFactor: 0.6),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

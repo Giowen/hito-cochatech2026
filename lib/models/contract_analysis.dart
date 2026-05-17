@@ -19,7 +19,10 @@ class AnalyzedClause {
 
   factory AnalyzedClause.fromJson(Map<String, dynamic> json) {
     return AnalyzedClause(
-      clauseText: json['clause_text'] as String,
+      // El LLM ocasionalmente omite `clause_text` cuando la cláusula vino
+      // sintetizada (vs citada). Toleramos con string vacío y filtramos arriba
+      // (ver ContractAnalysis.fromJson) para no mostrar tarjetas vacías.
+      clauseText: json['clause_text'] as String? ?? '',
       riskLevel: _parseRiskLevel(json['risk_level'] as String? ?? 'low'),
       issue: json['issue'] as String? ?? '',
       suggestion: json['suggestion'] as String? ?? '',
@@ -56,8 +59,8 @@ class GravamenCheck {
 
   factory GravamenCheck.fromJson(Map<String, dynamic> json) {
     return GravamenCheck(
-      status: json['status'] as String,
-      details: json['details'] as String,
+      status: json['status'] as String? ?? 'clean',
+      details: json['details'] as String? ?? '',
     );
   }
 
@@ -87,22 +90,34 @@ class ContractAnalysis {
   });
 
   factory ContractAnalysis.fromJson(Map<String, dynamic> json) {
+    // overall_risk_score puede llegar como int o double (Postgres NUMERIC) o
+    // num genérico — normalizar antes del cast directo a int.
+    final rawRisk = json['overall_risk_score'];
+    final riskScore = rawRisk is num ? rawRisk.toInt() : 0;
+
+    // Filtramos cláusulas con texto vacío para no renderizar tarjetas en
+    // blanco; el LLM a veces emite items malformados.
+    final clauses = (json['analyzed_clauses'] as List? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(AnalyzedClause.fromJson)
+        .where((c) => c.clauseText.trim().isNotEmpty)
+        .toList();
+
     return ContractAnalysis(
-      contractType: json['contract_type'] as String,
+      contractType: json['contract_type'] as String? ?? 'anticretico',
       contractText: json['contract_text'] as String? ?? '',
-      overallRiskScore: json['overall_risk_score'] as int? ?? 0,
-      analyzedClauses: (json['analyzed_clauses'] as List? ?? [])
-          .map((c) => AnalyzedClause.fromJson(c as Map<String, dynamic>))
-          .toList(),
+      overallRiskScore: riskScore,
+      analyzedClauses: clauses,
       gravamenCheck: GravamenCheck.fromJson(
         (json['gravamen_check'] as Map<String, dynamic>?) ??
-            {'status': 'clean', 'details': ''},
+            const {'status': 'clean', 'details': ''},
       ),
       fraudPatternsDetected:
-          (json['fraud_patterns_detected'] as List? ?? []).cast<String>(),
+          (json['fraud_patterns_detected'] as List? ?? const [])
+              .cast<String>(),
       summary: json['summary'] as String? ?? '',
       recommendations:
-          (json['recommendations'] as List? ?? []).cast<String>(),
+          (json['recommendations'] as List? ?? const []).cast<String>(),
     );
   }
 
@@ -117,4 +132,20 @@ class ContractAnalysis {
         'summary': summary,
         'recommendations': recommendations,
       };
+
+  /// Helper para reveal progresivo: devuelve copia con un subset de cláusulas.
+  /// Usado por ContractAnalysisScreen para animar la aparición de cláusulas
+  /// una por una mientras "la IA está procesando".
+  ContractAnalysis copyWithClauses(List<AnalyzedClause> clauses) {
+    return ContractAnalysis(
+      contractType: contractType,
+      contractText: contractText,
+      overallRiskScore: overallRiskScore,
+      analyzedClauses: clauses,
+      gravamenCheck: gravamenCheck,
+      fraudPatternsDetected: fraudPatternsDetected,
+      summary: summary,
+      recommendations: recommendations,
+    );
+  }
 }

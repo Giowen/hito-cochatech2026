@@ -1,0 +1,201 @@
+{
+  "_description": "Análisis pre-computados de los contratos de cada propiedad seed. Permiten que el Copiloto Legal abra instantáneamente (sin Groq, sin Supabase) para la demo y para uso real cuando el agente todavía no subió un contrato personalizado. Si el usuario sube un PDF custom, esos sí van al LLM.",
+  "_schema": "key = '{property_id}:{contract_type}'. Falta una entry → service hace fallback a cache Supabase → LLM",
+  "p01:anticretico": {
+    "contract_type": "anticretico",
+    "overall_risk_score": 78,
+    "analyzed_clauses": [
+      {
+        "clause_text": "CLÁUSULA PRIMERA. Identificación de las partes.\nComparecen Sr. Carlos Mendoza R., con CI 4.231.876 Cbba, mayor de edad, domiciliado en calle Aniceto Arce N° 421, en calidad de PROPIETARIO; y los esposos Juan García y Ana López, con CI 8.421.190 y 9.102.554 respectivamente, en calidad de ANTICRESISTAS.",
+        "risk_level": "low",
+        "issue": "Identificación completa de todas las partes con CI y domicilio. Cumple CC art. 1429.",
+        "suggestion": "Verificá CI vía SEGIP el día de la firma. Estándar."
+      },
+      {
+        "clause_text": "CLÁUSULA SEGUNDA. Objeto del contrato.\nEl propietario entrega a los anticresistas el inmueble ubicado en Av. Pando N° 1842, zona Cala Cala, Cochabamba, registrado en Derechos Reales bajo Folio Real 3.01.4.99.0034521, con superficie de terreno de 320 m² y construcción de 280 m².",
+        "risk_level": "low",
+        "issue": "Identificación registral correcta del inmueble (folio + superficies).",
+        "suggestion": "Verificá que el folio coincida con la certificación de DD.RR. actualizada."
+      },
+      {
+        "clause_text": "CLÁUSULA TERCERA. Monto del anticrético.\nEl monto total del anticrético es de Bs 320.000 (TRESCIENTOS VEINTE MIL BOLIVIANOS), que serán entregados en su totalidad al momento de la firma del presente contrato y consignación notarial.",
+        "risk_level": "low",
+        "issue": "Monto expresado en BOB (CC art. 1431). Entrega contra firma con consignación notarial es práctica segura.",
+        "suggestion": "Pedí recibo notarial separado al hacer la consignación."
+      },
+      {
+        "clause_text": "CLÁUSULA CUARTA. Duración.\nEl plazo del presente contrato es de VEINTICUATRO (24) meses calendario, contados a partir de la firma. Renovable por acuerdo escrito de ambas partes.",
+        "risk_level": "low",
+        "issue": "Plazo de 24 meses está dentro del rango habitual (CC art. 1432 permite hasta 5 años).",
+        "suggestion": "Sin cambios."
+      },
+      {
+        "clause_text": "CLÁUSULA QUINTA. Gravámenes y libertad de cargas.\nEL PROPIETARIO declara bajo juramento que el inmueble se encuentra libre de todo gravamen, hipoteca, embargo o cualquier afectación que pudiera limitar el derecho del anticresista.",
+        "risk_level": "high",
+        "issue": "DECLARACIÓN FALSA: el cruce con DD.RR. detectó una hipoteca activa con Banco BISA por $42,000 USD (Folio Real 3.01.4.99.0034521). Esta cláusula contradice el estado registral real.",
+        "suggestion": "NO firmar hasta que el propietario presente la cancelación de hipoteca registrada en DD.RR. (no basta una carta del banco)."
+      },
+      {
+        "clause_text": "CLÁUSULA SEXTA. Uso del inmueble.\nLos anticresistas podrán ocupar y usar el inmueble como vivienda familiar, debiendo conservarlo en buen estado y devolverlo en las condiciones recibidas, salvo el desgaste natural.",
+        "risk_level": "low",
+        "issue": "Cláusula de uso estándar con la excepción correcta de desgaste natural.",
+        "suggestion": "Sin cambios. Hacé inventario fotográfico al momento de la entrega."
+      },
+      {
+        "clause_text": "CLÁUSULA SÉPTIMA. Devolución del monto.\nAl término del contrato el PROPIETARIO se compromete a devolver el monto total del anticrético dentro de los treinta (30) días siguientes, condicionado a la venta de otra propiedad de su titularidad ubicada en zona Sacaba.",
+        "risk_level": "high",
+        "issue": "Condicionar la devolución a la venta de OTRO inmueble es un patrón de fraude documental. El anticrético es un derecho real (CC art. 1435): la restitución no puede depender de eventos externos.",
+        "suggestion": "Exigí eliminar la condición de venta. La devolución debe ser incondicional al vencimiento."
+      },
+      {
+        "clause_text": "CLÁUSULA OCTAVA. Servicios básicos.\nLos servicios de agua, luz, gas y mantenimiento ordinario correrán por cuenta de los anticresistas durante todo el plazo del contrato.",
+        "risk_level": "low",
+        "issue": "Distribución de gastos habitual en anticrético.",
+        "suggestion": "Sin cambios. Aclarar quién paga reparaciones mayores (CC art. 1437)."
+      },
+      {
+        "clause_text": "CLÁUSULA NOVENA. Mejoras al inmueble.\nToda mejora introducida por los anticresistas pasará a beneficio del propietario sin derecho a indemnización ni compensación alguna.",
+        "risk_level": "medium",
+        "issue": "Renuncia total a indemnización por mejoras útiles puede considerarse abusiva si éstas aumentan el valor. CC art. 1438 permite cierta compensación.",
+        "suggestion": "Negociar que mejoras estructurales con autorización escrita sí se compensen al final."
+      },
+      {
+        "clause_text": "CLÁUSULA DÉCIMA. Causal de resolución anticipada.\nEl contrato podrá resolverse antes del plazo por mutuo acuerdo o por incumplimiento grave de cualquiera de las partes, previa notificación notarial con treinta (30) días de anticipación.",
+        "risk_level": "low",
+        "issue": "Procedimiento de resolución claro con notificación notarial y plazo razonable.",
+        "suggestion": "Sin cambios."
+      },
+      {
+        "clause_text": "CLÁUSULA UNDÉCIMA. Garantía de cumplimiento.\nEn caso de incumplimiento del propietario, el anticresista podrá retener el inmueble hasta la devolución total del monto, sin que ello configure ocupación indebida.",
+        "risk_level": "low",
+        "issue": "Protección al anticresista correcta y conforme CC art. 1435 (derecho de retención).",
+        "suggestion": "Sin cambios. Cláusula a favor de los anticresistas."
+      },
+      {
+        "clause_text": "CLÁUSULA DUODÉCIMA. Jurisdicción.\nPara cualquier controversia derivada del presente contrato, las partes se someten a la jurisdicción ordinaria de Cochabamba, renunciando expresamente a cualquier otro fuero.",
+        "risk_level": "low",
+        "issue": "Sumisión a jurisdicción local estándar.",
+        "suggestion": "Sin cambios."
+      },
+      {
+        "clause_text": "CLÁUSULA DECIMOTERCERA. Protocolización.\nEl presente contrato será elevado a Escritura Pública y registrado en Derechos Reales dentro de los quince (15) días siguientes a su suscripción.",
+        "risk_level": "low",
+        "issue": "Cumple obligatoriedad de protocolización notarial (CC art. 1431) en plazo apropiado.",
+        "suggestion": "Verificá que el notario inscriba efectivamente en DD.RR. dentro del plazo."
+      }
+    ],
+    "fraud_patterns_detected": [
+      "Cláusula QUINTA declara libertad de gravámenes cuando existe hipoteca activa Banco BISA por $42,000 USD — declaración falsa verificada en DD.RR.",
+      "Cláusula SÉPTIMA condiciona devolución del capital a la venta de OTRO inmueble — el anticrético no admite condiciones externas (CC art. 1435)."
+    ],
+    "summary": "Contrato de anticrético con 2 cláusulas de alto riesgo: la quinta declara libertad de gravámenes que contradice el registro de DD.RR. (hipoteca activa Banco BISA $42K USD), y la séptima condiciona la devolución a un evento externo (venta de otro inmueble). 1 cláusula media (renuncia a mejoras). 10 cláusulas conformes al CC boliviano. Decisión: NO firmar sin levantar la hipoteca y reescribir la séptima.",
+    "recommendations": [
+      "NO firmar hasta presentación de certificación de DD.RR. con cancelación de hipoteca Banco BISA registrada.",
+      "Reescribir Cláusula SÉPTIMA: la devolución del capital debe ser incondicional al vencimiento.",
+      "Negociar Cláusula NOVENA para compensar mejoras estructurales mayores autorizadas por escrito.",
+      "Solicitar certificado de DD.RR. actualizado (no mayor a 30 días) antes de cualquier firma.",
+      "Hacer inventario fotográfico al momento de recibir el inmueble para evitar disputas en la devolución."
+    ],
+    "gravamen_check": {
+      "status": "flagged",
+      "details": "Propiedad figura como garantía en hipoteca activa con Banco BISA por $42,000 USD. Folio Real 3.01.4.99.0034521. El contrato presentado declara la propiedad libre de gravámenes (Cláusula QUINTA) — declaración FALSA verificada en DD.RR. 2 horas atrás."
+    }
+  },
+  "_default:anticretico": {
+    "contract_type": "anticretico",
+    "overall_risk_score": 25,
+    "analyzed_clauses": [
+      {
+        "clause_text": "CLÁUSULA PRIMERA. Identificación de las partes.",
+        "risk_level": "low",
+        "issue": "Identificación de partes presente.",
+        "suggestion": "Verificá CI vía SEGIP el día de firma."
+      },
+      {
+        "clause_text": "CLÁUSULA SEGUNDA. Objeto del contrato.",
+        "risk_level": "low",
+        "issue": "Identificación registral del inmueble.",
+        "suggestion": "Verificá que el folio coincida con DD.RR."
+      },
+      {
+        "clause_text": "CLÁUSULA TERCERA. Monto del anticrético.",
+        "risk_level": "low",
+        "issue": "Monto en BOB y consignación notarial.",
+        "suggestion": "Pedí recibo notarial separado."
+      },
+      {
+        "clause_text": "CLÁUSULA CUARTA. Duración.",
+        "risk_level": "low",
+        "issue": "Plazo dentro del rango habitual (CC art. 1432).",
+        "suggestion": "Sin cambios."
+      },
+      {
+        "clause_text": "CLÁUSULA QUINTA. Gravámenes y libertad de cargas.",
+        "risk_level": "low",
+        "issue": "Declaración de libertad de gravámenes verificada en DD.RR.",
+        "suggestion": "Sin cambios. Solicitar certificación reciente."
+      },
+      {
+        "clause_text": "CLÁUSULA SEXTA. Uso del inmueble.",
+        "risk_level": "low",
+        "issue": "Uso como vivienda familiar con desgaste natural exceptuado.",
+        "suggestion": "Hacé inventario fotográfico al recibir."
+      },
+      {
+        "clause_text": "CLÁUSULA SÉPTIMA. Devolución del monto.",
+        "risk_level": "medium",
+        "issue": "Plazo de devolución claro. Revisar que no haya condicionantes externos.",
+        "suggestion": "Confirmá que la devolución sea incondicional al vencimiento."
+      },
+      {
+        "clause_text": "CLÁUSULA OCTAVA. Servicios básicos.",
+        "risk_level": "low",
+        "issue": "Servicios a cargo del anticresista — habitual.",
+        "suggestion": "Aclarar quién paga reparaciones mayores."
+      },
+      {
+        "clause_text": "CLÁUSULA NOVENA. Mejoras al inmueble.",
+        "risk_level": "low",
+        "issue": "Régimen de mejoras estándar (CC art. 1438).",
+        "suggestion": "Negociar mejoras estructurales con compensación si hay autorización escrita."
+      },
+      {
+        "clause_text": "CLÁUSULA DÉCIMA. Causal de resolución anticipada.",
+        "risk_level": "low",
+        "issue": "Procedimiento de resolución claro con notificación notarial.",
+        "suggestion": "Sin cambios."
+      },
+      {
+        "clause_text": "CLÁUSULA UNDÉCIMA. Garantía de cumplimiento.",
+        "risk_level": "low",
+        "issue": "Derecho de retención conforme CC art. 1435.",
+        "suggestion": "Sin cambios — protege al anticresista."
+      },
+      {
+        "clause_text": "CLÁUSULA DUODÉCIMA. Jurisdicción.",
+        "risk_level": "low",
+        "issue": "Sumisión a jurisdicción local estándar.",
+        "suggestion": "Sin cambios."
+      },
+      {
+        "clause_text": "CLÁUSULA DECIMOTERCERA. Protocolización.",
+        "risk_level": "low",
+        "issue": "Protocolización notarial obligatoria (CC art. 1431).",
+        "suggestion": "Verificá inscripción efectiva en DD.RR. dentro del plazo."
+      }
+    ],
+    "fraud_patterns_detected": [],
+    "summary": "Contrato de anticrético conforme al Código Civil boliviano. 12 cláusulas estándar, 1 cláusula media que requiere revisión menor en plazo de devolución. Decisión sugerida: Firmar con confirmación de incondicionalidad en la cláusula séptima.",
+    "recommendations": [
+      "Solicitá certificación reciente de Derechos Reales (no mayor a 30 días) antes de firmar.",
+      "Verificá CI de todas las partes vía SEGIP el día de la firma.",
+      "Confirmá que la devolución del capital sea incondicional al vencimiento.",
+      "Hacé inventario fotográfico del inmueble al recibirlo.",
+      "Protocolizá ante Notario de Fe Pública dentro de los 15 días siguientes."
+    ],
+    "gravamen_check": {
+      "status": "clean",
+      "details": "No se detectaron gravámenes activos en el registro de Derechos Reales."
+    }
+  }
+}

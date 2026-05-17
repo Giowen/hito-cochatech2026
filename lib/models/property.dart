@@ -44,6 +44,11 @@ class Property {
   /// Anticretico amount in BOB (if applicable).
   final int? anticreticoBob;
 
+  /// Renta mensual en BOB (si soporta alquiler). Independiente de `priceBob`
+  /// (precio de venta) y `anticreticoBob` (capital). Sin esto, comparar el
+  /// budget mensual del cliente contra el precio de venta dispara matches falsos.
+  final int? rentMonthlyBob;
+
   /// Year of construction.
   final int? yearBuilt;
 
@@ -87,6 +92,7 @@ class Property {
     this.lotM2,
     this.supportedTransactions = const [],
     this.anticreticoBob,
+    this.rentMonthlyBob,
     this.yearBuilt,
     this.aiNotes = const [],
     this.compatibility,
@@ -139,6 +145,7 @@ class Property {
               ?? [json['listing_mode'] as String])
           .cast<String>(),
       anticreticoBob: json['anticretico_bob'] as int?,
+      rentMonthlyBob: json['rent_monthly_bob'] as int?,
       yearBuilt: json['year_built'] as int?,
       aiNotes: (json['ai_notes'] as List? ?? const []).cast<String>(),
       compatibility: json['compatibility'] as int?,
@@ -158,15 +165,22 @@ class Property {
       anticreticoBob != null;
 
   /// Precio efectivo en BOB según la modalidad de transacción.
-  /// - 'anticretico' → anticreticoBob (capital de anticrético)
-  /// - 'venta' / 'compra' / otros → priceBob (precio de venta)
-  /// - alquiler u otros sin valor → 0
+  /// - 'anticretico' → anticreticoBob (capital del anticrético)
+  /// - 'alquiler'    → rentMonthlyBob (renta mensual)
+  /// - 'venta' / 'compra' → priceBob (precio de venta)
+  /// - cualquier otro / dato faltante → 0 (deshabilita el cap de presupuesto
+  ///   para evitar comparaciones entre escalas distintas)
   ///
-  /// Crítico para budget comparisons: para anticrético, el cliente piensa en
-  /// el capital ~$20-40k USD, no en el priceBob ~$200k USD.
+  /// Crítico: para anticrético, el cliente piensa en el capital ~$20-40k USD,
+  /// no en el priceBob ~$200k USD. Para alquiler, en la mensualidad ~$800-3K,
+  /// no en el precio de venta. Antes esto devolvía priceBob para alquiler →
+  /// budget overrun falso del ~99% en cada match.
   int effectivePriceBob(String transactionType) {
     if (transactionType == 'anticretico' && anticreticoBob != null) {
       return anticreticoBob!;
+    }
+    if (transactionType == 'alquiler') {
+      return rentMonthlyBob ?? 0;
     }
     return priceBob;
   }
@@ -196,6 +210,7 @@ class Property {
         if (lotM2 != null) 'lot_m2': lotM2,
         'supported_transactions': supportedTransactions,
         if (anticreticoBob != null) 'anticretico_bob': anticreticoBob,
+        if (rentMonthlyBob != null) 'rent_monthly_bob': rentMonthlyBob,
         if (yearBuilt != null) 'year_built': yearBuilt,
         'ai_notes': aiNotes,
         if (compatibility != null) 'compatibility': compatibility,

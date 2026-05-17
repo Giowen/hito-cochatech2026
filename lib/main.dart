@@ -6,17 +6,23 @@ import 'providers.dart';
 import 'screens/matches_screen.dart';
 import 'screens/role_selector_screen.dart';
 import 'theme.dart';
+import 'utils/env.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env');
 
-  final supabaseUrl = dotenv.env['SUPABASE_URL'];
-  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
-  if (supabaseUrl != null &&
-      supabaseUrl.isNotEmpty &&
-      supabaseAnonKey != null &&
-      supabaseAnonKey.isNotEmpty) {
+  // dotenv.load lee `.env` desde rootBundle. En producción `.env` ya no se
+  // empaqueta (ver pubspec.yaml). El try/catch evita crash y la app cae al
+  // fallback de `String.fromEnvironment` vía Env.get(...).
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (e) {
+    debugPrint('[Hito] dotenv load skipped: $e (using --dart-define values)');
+  }
+
+  final supabaseUrl = Env.get('SUPABASE_URL');
+  final supabaseAnonKey = Env.get('SUPABASE_ANON_KEY');
+  if (supabaseUrl != null && supabaseAnonKey != null) {
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
