@@ -17,18 +17,25 @@ import 'services/contract_analysis_service.dart';
 import 'services/matching_service.dart';
 import 'services/property_management_service.dart';
 import 'services/valuation_service.dart';
+import 'services/voice_to_profile_service.dart';
 
-/// Notifier para el profile del cliente activo. Permite mutación vía .update().
-class ClientProfileNotifier extends Notifier<ClientProfile> {
+/// Notifier para el profile del cliente activo. Default null — el cliente
+/// debe describir su búsqueda por voz para que el matching se ejecute.
+///
+/// Esto evita el "demo path" donde la app aparece con scores precalculados
+/// del perfil hardcoded de Juan. La experiencia honesta: usuario llega →
+/// search vacío → voz → AI scorea.
+class ClientProfileNotifier extends Notifier<ClientProfile?> {
   @override
-  ClientProfile build() => ClientProfile.demoJuan;
+  ClientProfile? build() => null;
 
   void update(ClientProfile profile) => state = profile;
+  void clear() => state = null;
 }
 
-/// Profile activo (default: Juan demo path).
+/// Profile activo del cliente. Null si aún no hizo voice query.
 final clientProfileProvider =
-    NotifierProvider<ClientProfileNotifier, ClientProfile>(
+    NotifierProvider<ClientProfileNotifier, ClientProfile?>(
   ClientProfileNotifier.new,
 );
 
@@ -96,9 +103,18 @@ final propertyManagementServiceProvider = Provider<PropertyManagementService>(
   ),
 );
 
+/// VoiceToProfileService — Whisper (Groq) + LLM extraction. Convierte voz
+/// del usuario en un ClientProfile estructurado. Cero hardcoded.
+final voiceToProfileServiceProvider = Provider<VoiceToProfileService>(
+  (ref) => VoiceToProfileService(),
+);
+
 /// Resultados de matching ordenados descending por compatibility.
+/// Si el cliente aún no hizo voice query (profile null), retorna [] — la
+/// UI muestra empty state CTA en vez de scores.
 final matchResultsProvider = FutureProvider<List<MatchResult>>((ref) async {
   final profile = ref.watch(clientProfileProvider);
+  if (profile == null) return const [];
   final service = ref.watch(matchingServiceProvider);
   final properties = await ref.watch(propertiesProvider.future);
   return service.scoreAll(profile: profile, properties: properties);
@@ -223,6 +239,22 @@ class ViewModeNotifier extends Notifier<ViewMode> {
 /// Vista global (María agente / Juan cliente) — controlado desde HitoTopBar.
 final viewModeProvider = NotifierProvider<ViewModeNotifier, ViewMode>(
   ViewModeNotifier.new,
+);
+
+/// Vista del panel derecho — map o AI thinking. Default 'map' (alineado al
+/// design canonical fullscreen). El toggle permite cambiar a 'ai' para ver
+/// el pipeline en vivo del matching.
+enum RightPanelView { map, ai }
+
+class RightPanelViewNotifier extends Notifier<RightPanelView> {
+  @override
+  RightPanelView build() => RightPanelView.map;
+  void set(RightPanelView v) => state = v;
+}
+
+final rightPanelViewProvider =
+    NotifierProvider<RightPanelViewNotifier, RightPanelView>(
+  RightPanelViewNotifier.new,
 );
 
 /// Flujo principal activo en sidebar (Matchmaking / Valuación / Copiloto Legal).

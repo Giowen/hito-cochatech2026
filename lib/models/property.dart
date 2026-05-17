@@ -157,6 +157,20 @@ class Property {
       listingMode == 'anticretico' ||
       anticreticoBob != null;
 
+  /// Precio efectivo en BOB según la modalidad de transacción.
+  /// - 'anticretico' → anticreticoBob (capital de anticrético)
+  /// - 'venta' / 'compra' / otros → priceBob (precio de venta)
+  /// - alquiler u otros sin valor → 0
+  ///
+  /// Crítico para budget comparisons: para anticrético, el cliente piensa en
+  /// el capital ~$20-40k USD, no en el priceBob ~$200k USD.
+  int effectivePriceBob(String transactionType) {
+    if (transactionType == 'anticretico' && anticreticoBob != null) {
+      return anticreticoBob!;
+    }
+    return priceBob;
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'address': address,

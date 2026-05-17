@@ -103,6 +103,7 @@ REGLAS:
         const {'role': 'system', 'content': _systemPrompt},
         {'role': 'user', 'content': _buildUserPrompt(property, comparables)},
       ],
+      model: GroqModels.valuation,
       temperature: 0.2,
       responseFormat: {'type': 'json_object'},
     );

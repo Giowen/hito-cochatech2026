@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/match_result.dart';
 import '../providers.dart';
 import '../theme.dart';
+import '../widgets/ai_thinking_panel.dart';
 import '../widgets/hito_sidebar.dart';
 import '../widgets/hito_top_bar.dart';
 import '../widgets/match_explanation_sheet.dart';
@@ -53,21 +54,31 @@ class MatchesScreen extends ConsumerWidget {
 class _MainContent extends ConsumerWidget {
   const _MainContent();
 
+  /// Layout responsive:
+  ///  - >=1300px: lista (357) | mapa flex | AI panel (300)
+  ///  - 900-1300: lista (357) | mapa flex (AI panel hidden — toggle pendiente)
+  ///  - <900:     lista (single column)
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 900;
-        if (isWide) {
-          return Row(
-            children: const [
-              SizedBox(width: 420, child: _LeftContentPanel()),
-              VerticalDivider(width: 1, color: HitoTokens.border, thickness: 1),
-              Expanded(child: PropertiesMap()),
+        final w = constraints.maxWidth;
+        if (w < 900) return const _LeftContentPanel();
+
+        final showAiPanel = w >= 1300;
+        return Row(
+          children: [
+            const SizedBox(width: 357, child: _LeftContentPanel()),
+            const VerticalDivider(
+                width: 1, color: HitoTokens.border, thickness: 1),
+            const Expanded(child: PropertiesMap()),
+            if (showAiPanel) ...[
+              const VerticalDivider(
+                  width: 1, color: HitoTokens.border, thickness: 1),
+              const SizedBox(width: 300, child: AiThinkingPanel()),
             ],
-          );
-        }
-        return const _LeftContentPanel();
+          ],
+        );
       },
     );
   }
@@ -87,9 +98,9 @@ class _LeftContentPanel extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _RoleBanner(viewMode: viewMode),
+          _RoleBanner(viewMode: viewMode, hasProfile: profile != null),
           _SearchQueryCard(
-            transcript: profile.voiceInputTranscript,
+            transcript: profile?.voiceInputTranscript,
             viewMode: viewMode,
           ),
           const SizedBox(height: 16),
@@ -124,7 +135,8 @@ class _LeftContentPanel extends ConsumerWidget {
 /// Vista Juan (cliente): contexto de búsqueda personal, presupuesto.
 class _RoleBanner extends StatelessWidget {
   final ViewMode viewMode;
-  const _RoleBanner({required this.viewMode});
+  final bool hasProfile;
+  const _RoleBanner({required this.viewMode, required this.hasProfile});
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +186,9 @@ class _RoleBanner extends StatelessWidget {
                         Text(
                           isAgent
                               ? 'Bienvenida, María · Agente Pro'
-                              : 'Hola, Juan · Familia García-López',
+                              : hasProfile
+                                  ? 'Hola, Juan'
+                                  : '¿Qué casa buscas?',
                           style: GoogleFonts.geist(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -186,8 +200,10 @@ class _RoleBanner extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           isAgent
-                              ? '12 listings · 3 leads · 1 contrato pendiente'
-                              : 'Casa familia · hasta \$220k USD · Recoleta',
+                              ? '12 listings · matchmaking AI · 1 contrato pendiente'
+                              : hasProfile
+                                  ? 'Búsqueda activa · perfil estructurado por AI'
+                                  : 'Toca el micrófono y describe tu búsqueda',
                           style: GoogleFonts.geist(
                             fontSize: 11,
                             color: HitoTokens.ink3,
@@ -208,12 +224,72 @@ class _RoleBanner extends StatelessWidget {
   }
 }
 
-class _SearchQueryCard extends ConsumerWidget {
+class _SearchQueryCard extends ConsumerStatefulWidget {
   final String? transcript;
   final ViewMode viewMode;
   const _SearchQueryCard({required this.transcript, required this.viewMode});
 
-  void _openVoiceInput(BuildContext context) {
+  @override
+  ConsumerState<_SearchQueryCard> createState() => _SearchQueryCardState();
+}
+
+class _SearchQueryCardState extends ConsumerState<_SearchQueryCard> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  bool _processing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.transcript ?? '');
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SearchQueryCard old) {
+    super.didUpdateWidget(old);
+    if (old.transcript != widget.transcript &&
+        widget.transcript != null &&
+        widget.transcript != _controller.text) {
+      _controller.text = widget.transcript!;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitText() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _processing) return;
+    setState(() => _processing = true);
+    try {
+      final svc = ref.read(voiceToProfileServiceProvider);
+      final profile = await svc.extractProfile(text);
+      if (!mounted) return;
+      ref.read(clientProfileProvider.notifier).update(profile);
+      ref.invalidate(matchResultsProvider);
+      _focusNode.unfocus();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: HitoTokens.danger,
+          content: Text(
+            'Error procesando búsqueda: $e',
+            style: GoogleFonts.geist(color: Colors.white),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _processing = false);
+    }
+  }
+
+  void _openVoiceInput() {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -223,8 +299,9 @@ class _SearchQueryCard extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isAgent = viewMode == ViewMode.agent;
+  Widget build(BuildContext context) {
+    final isAgent = widget.viewMode == ViewMode.agent;
+    final hasContent = _controller.text.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Column(
@@ -233,9 +310,7 @@ class _SearchQueryCard extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 6, left: 4),
             child: Text(
-              isAgent
-                  ? 'BÚSQUEDA DEL CLIENTE'
-                  : 'TU BÚSQUEDA POR VOZ',
+              isAgent ? 'BÚSQUEDA DEL CLIENTE' : 'TU BÚSQUEDA',
               style: GoogleFonts.geist(
                 fontSize: 10,
                 letterSpacing: 1.0,
@@ -244,68 +319,95 @@ class _SearchQueryCard extends ConsumerWidget {
               ),
             ),
           ),
-          Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _openVoiceInput(context),
-          borderRadius: BorderRadius.circular(HitoTokens.rXl),
-          child: Container(
-            padding: const EdgeInsets.all(14),
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
             decoration: BoxDecoration(
               color: HitoTokens.paper,
               borderRadius: BorderRadius.circular(HitoTokens.rXl),
-              border: Border.all(color: HitoTokens.border),
+              border: Border.all(
+                color: _focusNode.hasFocus
+                    ? HitoTokens.teal
+                    : HitoTokens.border,
+                width: _focusNode.hasFocus ? 1.5 : 1,
+              ),
             ),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Icon(
-                    Icons.search,
-                    size: 18,
-                    color: HitoTokens.ink3,
-                  ),
-                ),
+                Icon(Icons.search, size: 18, color: HitoTokens.ink3),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    transcript ??
-                        'Toca el micrófono para buscar por voz...',
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    enabled: !_processing,
+                    minLines: 1,
+                    maxLines: 3,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _submitText(),
+                    onChanged: (_) => setState(() {}),
                     style: GoogleFonts.geist(
                       fontSize: 13,
-                      color: transcript != null
-                          ? HitoTokens.ink1
-                          : HitoTokens.ink4,
+                      color: HitoTokens.ink1,
                       height: 1.5,
-                      fontStyle: transcript != null
-                          ? FontStyle.normal
-                          : FontStyle.italic,
                     ),
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
+                    decoration: InputDecoration(
+                      hintText:
+                          'Describe lo que buscas — casa, depto, terreno, anticrético...',
+                      hintStyle: GoogleFonts.geist(
+                        fontSize: 13,
+                        color: HitoTokens.ink4,
+                        fontStyle: FontStyle.italic,
+                      ),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: HitoTokens.paper2,
-                    shape: BoxShape.circle,
+                const SizedBox(width: 6),
+                if (hasContent && !_processing)
+                  IconButton(
+                    onPressed: _submitText,
+                    tooltip: 'Buscar',
+                    icon: Icon(Icons.arrow_forward_rounded,
+                        size: 18, color: HitoTokens.teal),
+                    style: IconButton.styleFrom(
+                      backgroundColor: HitoTokens.teal.withAlpha(30),
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(HitoTokens.r2xl),
+                      ),
+                    ),
                   ),
-                  child: Icon(
-                    Icons.mic_none_rounded,
-                    size: 18,
-                    color: HitoTokens.ink2,
+                if (_processing)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   ),
-                ),
+                if (!hasContent && !_processing)
+                  IconButton(
+                    onPressed: _openVoiceInput,
+                    tooltip: 'Buscar por voz',
+                    icon: Icon(Icons.mic_rounded,
+                        size: 18, color: Colors.white),
+                    style: IconButton.styleFrom(
+                      backgroundColor: HitoTokens.teal,
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(HitoTokens.r2xl),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
-        ),
-      ),
         ],
       ),
     );
@@ -331,8 +433,8 @@ class _ResultsHeader extends ConsumerWidget {
             children: [
               Text(
                 isAgent
-                    ? (count > 0 ? 'Matches para tu cliente' : 'Matches')
-                    : (count > 0 ? '$count propiedades' : 'Resultados'),
+                    ? (count > 0 ? 'Matches para tu cliente' : 'Listings')
+                    : (count > 0 ? '$count propiedades' : 'Inventario'),
                 style: GoogleFonts.instrumentSerif(
                   fontSize: 26,
                   color: HitoTokens.ink1,
@@ -344,8 +446,12 @@ class _ResultsHeader extends ConsumerWidget {
               const SizedBox(height: 2),
               Text(
                 isAgent
-                    ? '$count propiedades · 4 con 85%+ compat · 1 con gravamen'
-                    : 'Ordenadas por compatibilidad',
+                    ? (count > 0
+                        ? '$count propiedades · ordenadas por compat'
+                        : 'Sin búsqueda activa — el cliente debe hablar')
+                    : (count > 0
+                        ? 'Ordenadas por compatibilidad'
+                        : 'Aún sin búsqueda · toca el micrófono'),
                 style: GoogleFonts.geist(
                   fontSize: 12,
                   color: HitoTokens.ink3,
@@ -433,6 +539,9 @@ class _MatchesListState extends ConsumerState<_MatchesList> {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
       data: (properties) {
+        if (widget.matches.isEmpty) {
+          return _EmptyMatchesCta(propertyCount: properties.length);
+        }
         final propMap = {for (final p in properties) p.id: p};
         return ListView.builder(
           controller: _scrollController,
@@ -446,6 +555,89 @@ class _MatchesListState extends ConsumerState<_MatchesList> {
           },
         );
       },
+    );
+  }
+}
+
+/// Estado vacío para el lado izquierdo cuando no hay matches (profile null).
+/// CTA visible: tap mic. Muestra count de propiedades disponibles en el mapa
+/// para que el usuario sepa qué hay para explorar.
+class _EmptyMatchesCta extends ConsumerWidget {
+  final int propertyCount;
+  const _EmptyMatchesCta({required this.propertyCount});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(28, 0, 28, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Icon(
+              Icons.mic_none_rounded,
+              size: 56,
+              color: HitoTokens.teal,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Cuéntanos lo que buscas',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.instrumentSerif(
+                fontSize: 22,
+                color: HitoTokens.ink1,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Toca el micrófono y describe la casa que necesitas. '
+              'La IA escucha, estructura tu perfil, y rankea las '
+              '$propertyCount propiedades disponibles.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.geist(
+                fontSize: 12.5,
+                color: HitoTokens.ink3,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: () {
+                showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  showDragHandle: true,
+                  builder: (_) => const VoiceInputSheet(),
+                );
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: HitoTokens.teal,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              icon: const Icon(Icons.mic_rounded, size: 18),
+              label: Text(
+                'Iniciar búsqueda por voz',
+                style: GoogleFonts.geist(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'O explora las propiedades directamente en el mapa →',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.geist(
+                fontSize: 11,
+                color: HitoTokens.ink4,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

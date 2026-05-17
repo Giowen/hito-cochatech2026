@@ -31,15 +31,27 @@ class ClientProfile {
 
   LatLng get desiredLocation => LatLng(desiredLat, desiredLng);
 
-  /// Hash determinístico de los campos que afectan la decisión de matching.
-  /// Sirve como cache key en `match_scoring_cache`. Estable cross-platform
-  /// (Web, mobile, desktop) — usa djb2 32-bit con `& 0xFFFFFFFF` para
-  /// evitar overflow en JS (Dart Web int = 53-bit safe).
+  /// Versión del prompt de matching. Bump para invalidar cache global cuando
+  /// el system prompt en MatchingService cambia (cambios de criterios, caps,
+  /// labels, etc). Cada bump → todos los profile hashes cambian → cache miss
+  /// global → Groq vuelve a calcular con el nuevo prompt.
   ///
-  /// Cambios en estos campos invalidan el cache; cambios en
-  /// `voiceInputTranscript` no (es metadata informativa).
+  /// History:
+  ///   v1: prompt inicial (C.1)
+  ///   v2: caps duros + labels claros + lectura transcript
+  ///   v3: caps duros enforced client-side post-LLM
+  ///   v4: compra↔venta normalization + budget extraction fixes
+  ///   v5: HECHOS verificados en user prompt + anti-hallucination rules
+  ///   v6: effectivePriceBob para anticretico (no usar priceBob de venta)
+  static const _promptVersion = 'v6';
+
+  /// Hash determinístico de los campos que afectan la decisión de matching.
+  /// Incluye `_promptVersion` para invalidar cache cuando cambia el prompt.
+  /// Cambios en `voiceInputTranscript` también se incluyen porque el LLM
+  /// lee el transcript para detectar preferencias de tipo (depto/casa).
   String get contentHash {
     final canonical = [
+      'pv:$_promptVersion',
       'b:$budgetMin-$budgetMax',
       't:$transactionType',
       'l:${desiredLat.toStringAsFixed(4)},${desiredLng.toStringAsFixed(4)}',
@@ -47,6 +59,7 @@ class ClientProfile {
       'bd:$minBedrooms',
       'a:$minAreaM2',
       'tags:${(List<String>.from(requiredTags)..sort()).join(",")}',
+      'vt:${voiceInputTranscript ?? ""}',
     ].join('|');
     return _djb2Hex64(canonical);
   }

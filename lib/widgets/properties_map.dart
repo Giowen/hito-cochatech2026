@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -107,32 +109,35 @@ class _PropertiesMapState extends ConsumerState<PropertiesMap> {
                       ],
                     ),
                   MarkerLayer(
-                    markers: properties
-                        .map((property) {
-                          final match = matchMap[property.id];
-                          if (match == null) return null;
-                          final isSelected = property.id == selectedId;
-                          return Marker(
-                            point: property.coords,
-                            width: isSelected ? 86 : 72,
-                            height: isSelected ? 56 : 46,
-                            child: GestureDetector(
-                              onTap: () {
-                                ref
-                                    .read(selectedPropertyIdProvider.notifier)
-                                    .select(property.id);
-                              },
-                              child: _MarkerBadge(
-                                compatibility: match.compatibilityPercent,
-                                isSelected: isSelected,
-                                isAnticretico:
-                                    property.supportsAnticretico,
-                              ),
-                            ),
-                          );
-                        })
-                        .whereType<Marker>()
-                        .toList(),
+                    markers: properties.map((property) {
+                      final match = matchMap[property.id];
+                      final isSelected = property.id == selectedId;
+                      return Marker(
+                        point: property.coords,
+                        width: isSelected ? 92 : 78,
+                        height: isSelected ? 56 : 46,
+                        child: GestureDetector(
+                          onTap: () {
+                            ref
+                                .read(selectedPropertyIdProvider.notifier)
+                                .select(property.id);
+                          },
+                          child: match != null
+                              ? _MarkerBadge(
+                                  compatibility: match.compatibilityPercent,
+                                  isSelected: isSelected,
+                                  isAnticretico:
+                                      property.supportsAnticretico,
+                                )
+                              : _BrowseMarker(
+                                  priceUsd: property.priceUsdParalelo,
+                                  isAnticretico:
+                                      property.supportsAnticretico,
+                                  isSelected: isSelected,
+                                ),
+                        ),
+                      );
+                    }).toList(),
                   ),
                   // "C" labels para comparables cuando valuation activa
                   if (comparableIds.isNotEmpty)
@@ -160,10 +165,186 @@ class _PropertiesMapState extends ConsumerState<PropertiesMap> {
                       setState(() => _showZones = !_showZones),
                 ),
               ),
+              if (matchesAsync.isLoading)
+                Positioned(
+                  bottom: 16,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: _AiEvaluatingPill(),
+                  ),
+                ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+/// Pill teal flotante en la base del mapa durante el scoring AI.
+/// Muestra spinner + texto rotativo simulando los pasos del pipeline.
+class _AiEvaluatingPill extends StatefulWidget {
+  @override
+  State<_AiEvaluatingPill> createState() => _AiEvaluatingPillState();
+}
+
+class _AiEvaluatingPillState extends State<_AiEvaluatingPill> {
+  static const _messages = [
+    'Filtrando inventario por tus requisitos...',
+    'Calculando distancias a tu zona deseada...',
+    'Evaluando cada propiedad con Llama 3.3...',
+    'Aplicando caps por presupuesto y modalidad...',
+    'Rankeando matches por compatibilidad...',
+  ];
+  int _index = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      if (!mounted) return;
+      setState(() => _index = (_index + 1) % _messages.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: Container(
+        key: ValueKey(_index),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          color: HitoTokens.ink1,
+          borderRadius: BorderRadius.circular(HitoTokens.r2xl),
+          boxShadow: const [
+            BoxShadow(
+              color: Color.fromRGBO(0, 0, 0, 0.18),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              _messages[_index],
+              style: GoogleFonts.geist(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Marker neutral cuando todavía no hay scoring AI. Muestra el precio en USD
+/// — el usuario puede explorar el inventario sin haber definido perfil aún.
+class _BrowseMarker extends StatelessWidget {
+  final int priceUsd;
+  final bool isAnticretico;
+  final bool isSelected;
+
+  const _BrowseMarker({
+    required this.priceUsd,
+    required this.isAnticretico,
+    required this.isSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = priceUsd > 0
+        ? '\$${(priceUsd / 1000).toStringAsFixed(0)}k'
+        : 'Anti.';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: EdgeInsets.symmetric(
+            horizontal: isSelected ? 10 : 8,
+            vertical: isSelected ? 5 : 4,
+          ),
+          decoration: BoxDecoration(
+            color: HitoTokens.paper,
+            borderRadius: BorderRadius.circular(HitoTokens.r2xl),
+            border: Border.all(
+              color: isSelected ? HitoTokens.teal : HitoTokens.borderStrong,
+              width: isSelected ? 2 : 1.2,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color.fromRGBO(13, 27, 42, 0.15),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.home_rounded,
+                size: isSelected ? 13 : 11,
+                color: HitoTokens.teal,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: GoogleFonts.geist(
+                  fontSize: isSelected ? 12 : 11,
+                  fontWeight: FontWeight.w700,
+                  color: HitoTokens.ink1,
+                  height: 1.0,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (isAnticretico) ...[
+          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: HitoTokens.paper,
+              borderRadius: BorderRadius.circular(HitoTokens.rXs),
+              border: Border.all(color: HitoTokens.borderStrong),
+            ),
+            child: Text(
+              'ANTI',
+              style: GoogleFonts.geist(
+                fontSize: 8,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                color: HitoTokens.teal2,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

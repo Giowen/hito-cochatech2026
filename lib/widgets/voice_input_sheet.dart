@@ -2,18 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:record/record.dart';
+
 import '../models/client_profile.dart';
 import '../providers.dart';
 import '../theme.dart';
 
-/// VoiceInputSheet — modal sheet para input de perfil del cliente (Acto 1 wow #1).
+/// VoiceInputSheet — captura voz del usuario, transcribe con Whisper (Groq),
+/// extrae perfil estructurado con Llama 3.3, y aplica a clientProfileProvider.
 ///
-/// Demo path: simula procesamiento 1.2s y retorna ClientProfile.demoJuan
-/// (familia 2 hijos pequeños, \$220k USD máx, Recoleta, anticrético).
-/// Real path: Whisper API + LLM extraction (Phase 2, ver ARCHITECTURE.md).
-///
-/// TODO R2: en producción, el audio capturado se sube a Cloudflare R2 vía
-/// signed URL → trigger Whisper transcription server-side.
+/// **Sin atajo demo**: cada query es voz real → transcripción real → JSON
+/// parseado por LLM. El profile resultante invalida el cache de matching
+/// (nuevo profileHash) y dispara 12 Groq calls frescos.
 class VoiceInputSheet extends ConsumerStatefulWidget {
   const VoiceInputSheet({super.key});
 
@@ -21,7 +20,7 @@ class VoiceInputSheet extends ConsumerStatefulWidget {
   ConsumerState<VoiceInputSheet> createState() => _VoiceInputSheetState();
 }
 
-enum _SheetState { idle, recording, processing, ready, error }
+enum _SheetState { idle, recording, transcribing, extracting, ready, error }
 
 class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   final _audioRecorder = AudioRecorder();
@@ -42,7 +41,8 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
       if (!hasPermission) {
         setState(() {
           _state = _SheetState.error;
-          _error = 'Permiso de micrófono denegado';
+          _error = 'Permiso de micrófono denegado. Activa el micrófono en '
+              'la configuración del navegador y vuelve a intentar.';
         });
         return;
       }
@@ -65,31 +65,61 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   }
 
   Future<void> _stopRecordingAndProcess() async {
+    String? audioUrl;
     try {
-      await _audioRecorder.stop();
-      setState(() => _state = _SheetState.processing);
-
-      // Demo path: simula Whisper + LLM extraction. Determinístico, cero red.
-      await Future.delayed(const Duration(milliseconds: 1200));
-      setState(() {
-        _transcription = ClientProfile.demoJuan.voiceInputTranscript!;
-        _extractedProfile = ClientProfile.demoJuan;
-        _state = _SheetState.ready;
-      });
+      audioUrl = await _audioRecorder.stop();
     } catch (e) {
       setState(() {
         _state = _SheetState.error;
-        _error = 'Error procesando: $e';
+        _error = 'Error deteniendo grabación: $e';
+      });
+      return;
+    }
+    if (audioUrl == null) {
+      setState(() {
+        _state = _SheetState.error;
+        _error = 'No se obtuvo audio. Intenta de nuevo.';
+      });
+      return;
+    }
+
+    final service = ref.read(voiceToProfileServiceProvider);
+
+    // Step 1: leer bytes
+    setState(() => _state = _SheetState.transcribing);
+    try {
+      final bytes = await service.audioFromUrl(audioUrl);
+
+      // Step 2: Whisper transcribe
+      final transcript = await service.transcribe(bytes);
+      if (!mounted) return;
+      if (transcript.isEmpty) {
+        setState(() {
+          _state = _SheetState.error;
+          _error =
+              'Whisper no detectó audio. Hablá más fuerte y vuelve a probar.';
+        });
+        return;
+      }
+      setState(() {
+        _transcription = transcript;
+        _state = _SheetState.extracting;
+      });
+
+      // Step 3: Llama extract → ClientProfile
+      final profile = await service.extractProfile(transcript);
+      if (!mounted) return;
+      setState(() {
+        _extractedProfile = profile;
+        _state = _SheetState.ready;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _state = _SheetState.error;
+        _error = 'Error procesando voz: $e';
       });
     }
-  }
-
-  void _skipToDemoProfile() {
-    setState(() {
-      _transcription = ClientProfile.demoJuan.voiceInputTranscript!;
-      _extractedProfile = ClientProfile.demoJuan;
-      _state = _SheetState.ready;
-    });
   }
 
   void _applyProfile() {
@@ -142,7 +172,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Hablale a María como si fuera tu agente.',
+              'Háblale a María como si fuera tu agente.',
               style: GoogleFonts.geist(
                 fontSize: 13,
                 color: HitoTokens.ink3,
@@ -197,16 +227,9 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
                       icon: const Icon(Icons.search_rounded, size: 18),
                       label: const Text('Buscar propiedades compatibles'),
                       style: FilledButton.styleFrom(
+                        backgroundColor: HitoTokens.teal,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                    ),
-                  ] else if (_state == _SheetState.idle ||
-                      _state == _SheetState.error) ...[
-                    const SizedBox(height: 10),
-                    TextButton.icon(
-                      onPressed: _skipToDemoProfile,
-                      icon: const Icon(Icons.skip_next_rounded, size: 16),
-                      label: const Text('Saltar voz · usar perfil demo'),
                     ),
                   ],
                 ],
@@ -221,13 +244,17 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   String _statusText() {
     switch (_state) {
       case _SheetState.idle:
-        return 'Toca el botón y di lo que buscas\n(presupuesto, zona, modalidad, características).';
+        return 'Toca el botón y di lo que buscas\n'
+            '(presupuesto, zona, modalidad, características).';
       case _SheetState.recording:
-        return '🔴  Escuchando... habla con claridad,\ntoca de nuevo para detener.';
-      case _SheetState.processing:
-        return 'Whisper transcribiendo · Llama 3.3 estructurando perfil...';
+        return '🔴  Escuchando... habla con claridad,\n'
+            'toca de nuevo para detener.';
+      case _SheetState.transcribing:
+        return 'Whisper transcribiendo el audio...';
+      case _SheetState.extracting:
+        return 'Llama 3.3 estructurando tu perfil...';
       case _SheetState.ready:
-        return '✓  Perfil listo. Revisa y confirma.';
+        return '✓  Perfil listo. Revísalo y confirma.';
       case _SheetState.error:
         return _error ?? 'Error desconocido';
     }
@@ -249,7 +276,8 @@ class _MicButton extends StatelessWidget {
       case _SheetState.recording:
         color = HitoTokens.danger;
         icon = Icons.stop_rounded;
-      case _SheetState.processing:
+      case _SheetState.transcribing:
+      case _SheetState.extracting:
         color = HitoTokens.teal;
         icon = Icons.hourglass_top_rounded;
       case _SheetState.ready:
@@ -263,19 +291,22 @@ class _MicButton extends StatelessWidget {
         icon = Icons.mic_rounded;
     }
 
+    final processing = state == _SheetState.transcribing ||
+        state == _SheetState.extracting;
+
     return Material(
       shape: const CircleBorder(),
       elevation: state == _SheetState.recording ? 8 : 4,
       color: color,
       child: InkWell(
         customBorder: const CircleBorder(),
-        onTap: state == _SheetState.processing ? null : onPressed,
+        onTap: processing ? null : onPressed,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: state == _SheetState.recording ? 130 : 110,
           height: state == _SheetState.recording ? 130 : 110,
           alignment: Alignment.center,
-          child: state == _SheetState.processing
+          child: processing
               ? const SizedBox(
                   width: 44,
                   height: 44,
@@ -370,7 +401,7 @@ class _ProfilePreview extends StatelessWidget {
           _row(
             context,
             Icons.swap_horiz_rounded,
-            'Modalidad: ${profile.transactionType} ${profile.requiredTags.contains('acepta_anticretico') ? "+ anticrético" : ""}',
+            'Modalidad: ${profile.transactionType}${profile.requiredTags.contains('acepta_anticretico') ? " + anticrético" : ""}',
           ),
           _row(
             context,

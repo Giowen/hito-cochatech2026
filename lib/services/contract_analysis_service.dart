@@ -55,6 +55,129 @@ class ContractAnalysisService {
     );
   }
 
+  /// Genera un borrador de contrato desde cero — modo creativo, NO análisis.
+  /// Usa los datos de la propiedad + placeholders entre [CORCHETES] para
+  /// partes faltantes. Devuelve un ContractAnalysis con todas las cláusulas
+  /// marcadas low (es plantilla limpia, sin riesgos).
+  ///
+  /// Temperature 0.1 — borrador consistente y reproducible.
+  Future<ContractAnalysis> generateContractDraft({
+    required Property property,
+    required String contractType,
+    Map<String, String>? parties,
+  }) async {
+    debugPrint(
+      '[Hito.Contract] generating draft type=$contractType for ${property.id}',
+    );
+
+    final effectiveParties = parties ??
+        {
+          'propietario_nombre':
+              property.agentName ?? '[NOMBRE_PROPIETARIO]',
+          'propietario_ci': '[CI_PROPIETARIO]',
+          'propietario_domicilio': '[DOMICILIO_PROPIETARIO]',
+          'contraparte_nombre': '[NOMBRE_CONTRAPARTE]',
+          'contraparte_ci': '[CI_CONTRAPARTE]',
+        };
+
+    final userPayload = {
+      'property': {
+        'address': property.address,
+        'neighborhood': property.neighborhood,
+        'area_m2': property.areaM2,
+        if (property.lotM2 != null) 'lot_m2': property.lotM2,
+        'bedrooms': property.bedrooms,
+        'bathrooms': property.bathrooms,
+        if (property.priceBob > 0) 'price_bob': property.priceBob,
+        if (property.anticreticoBob != null)
+          'anticretico_bob': property.anticreticoBob,
+      },
+      'contract_type': contractType,
+      'parties': effectiveParties,
+    };
+
+    final raw = await _groqClient.chat(
+      messages: [
+        const {'role': 'system', 'content': _generateSystemPrompt},
+        {'role': 'user', 'content': jsonEncode(userPayload)},
+      ],
+      model: GroqModels.contractGenerate,
+      temperature: 0.1,
+      responseFormat: {'type': 'json_object'},
+    );
+
+    final json = GroqClient.extractJson(raw);
+    if (json == null) {
+      throw FormatException('Groq returned non-JSON draft: $raw');
+    }
+
+    // No gravamen check para drafts — es plantilla nueva sin estado registral.
+    const cleanGravamen = GravamenCheck(
+      status: 'clean',
+      details:
+          'Borrador nuevo — completá los datos y verificá Derechos Reales antes de firmar.',
+    );
+
+    return ContractAnalysis.fromJson({
+      ...json,
+      'gravamen_check': cleanGravamen.toJson(),
+      'contract_type': contractType,
+    });
+  }
+
+  static const _generateSystemPrompt = '''
+Eres un abogado inmobiliario boliviano senior. Generás borradores LIMPIOS y
+ESTÁNDAR de contratos conformes al Código Civil de Bolivia:
+  - ANTICRÉTICO: CC arts. 1429-1438
+  - COMPRAVENTA: CC arts. 584-735
+  - ALQUILER: Ley General del Inquilinato
+
+REGLAS DE REDACCIÓN:
+- Generás 10-14 cláusulas conformes a la ley boliviana.
+- Cada cláusula es jurídicamente correcta, sin abusos contra ninguna parte.
+- Lenguaje formal pero claro, español neutro boliviano.
+- Citá los artículos del Código Civil pertinentes dentro de la cláusula.
+- Si faltan datos, usá placeholders entre [CORCHETES_MAYUSCULAS] tipo
+  [NOMBRE_PROPIETARIO], [CI_PROPIETARIO], [DOMICILIO_PROPIETARIO],
+  [NOMBRE_CONTRAPARTE], [CI_CONTRAPARTE].
+- Numerá cláusulas en mayúscula ordinal: "PRIMERA.— ...", "SEGUNDA.— ...",
+  "TERCERA.— ...", etc.
+- Para anticrético: incluí cláusula obligatoria de protocolización
+  (CC art. 1431) al final.
+- Para compraventa: incluí transferencia formal en Derechos Reales.
+- Para alquiler: incluí cláusula de penalidades por mora y depósito de garantía.
+
+OUTPUT JSON estricto (sin markdown, solo el objeto):
+{
+  "contract_type": "anticretico" | "compraventa" | "alquiler",
+  "contract_text": string — borrador completo, cláusulas concatenadas con
+    \\n\\n entre cada una. Ejemplo:
+    "PRIMERA.— Comparecen [NOMBRE_PROPIETARIO]...\\n\\nSEGUNDA.— ...",
+  "overall_risk_score": int entre 5 y 15 (plantilla limpia),
+  "analyzed_clauses": [
+    {
+      "clause_text": string (cita literal de la cláusula generada),
+      "risk_level": "low",
+      "issue": "Cláusula estándar conforme al Código Civil.",
+      "suggestion": "Sin cambios. Completá placeholders al protocolizar."
+    }
+    // una entrada por cada cláusula generada (10-14 items)
+  ],
+  "fraud_patterns_detected": [],
+  "summary": string — un párrafo máx 80 palabras explicando que es un
+    borrador estándar, qué partes deben completar, y la decisión sugerida
+    (siempre: "Revisá con notario y completá placeholders antes de firmar"),
+  "recommendations": [
+    "Completá los datos de las partes (placeholders entre corchetes).",
+    "Solicitá certificado de Derechos Reales actualizado (no mayor a 30 días).",
+    "Protocolizá ante Notario de Fe Pública antes de inscribir.",
+    // agregá 1-2 más según el tipo (ej: para anticrético "Acordá plazo de
+    // restitución sin condicionantes", para alquiler "Fijá depósito de
+    // garantía 1-2 meses por adelantado")
+  ]
+}
+''';
+
   /// API pública. Cache check → Groq → cache insert → return.
   /// Funciona para cualquier `contractType`: anticretico, compraventa, alquiler.
   Future<ContractAnalysis> analyzeContract({
@@ -164,6 +287,7 @@ REGLAS:
         const {'role': 'system', 'content': _systemPrompt},
         {'role': 'user', 'content': jsonEncode(userPayload)},
       ],
+      model: GroqModels.contract,
       temperature: 0.2,
       responseFormat: {'type': 'json_object'},
     );

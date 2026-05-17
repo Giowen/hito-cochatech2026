@@ -87,6 +87,53 @@ class Landmarks {
     coords: LatLng(-17.4211, -66.1771),
   );
 
+  // Zonas adicionales Cochabamba
+  static const albarrancho = Landmark(
+    slug: 'albarrancho',
+    displayName: 'Albarrancho',
+    coords: LatLng(-17.4317, -66.1969),
+  );
+  static const villaBusch = Landmark(
+    slug: 'villa_busch',
+    displayName: 'Villa Busch',
+    coords: LatLng(-17.418, -66.135),
+  );
+  static const pacataAlta = Landmark(
+    slug: 'pacata',
+    displayName: 'Pacata Alta',
+    coords: LatLng(-17.420, -66.170),
+  );
+  static const tiquipaya = Landmark(
+    slug: 'tiquipaya',
+    displayName: 'Tiquipaya',
+    coords: LatLng(-17.337, -66.207),
+  );
+  static const sacaba = Landmark(
+    slug: 'sacaba',
+    displayName: 'Sacaba',
+    coords: LatLng(-17.398, -66.040),
+  );
+  static const vinto = Landmark(
+    slug: 'vinto',
+    displayName: 'Vinto',
+    coords: LatLng(-17.378, -66.310),
+  );
+  static const colcapirhua = Landmark(
+    slug: 'colcapirhua',
+    displayName: 'Colcapirhua',
+    coords: LatLng(-17.380, -66.218),
+  );
+  static const quillacollo = Landmark(
+    slug: 'quillacollo',
+    displayName: 'Quillacollo',
+    coords: LatLng(-17.395, -66.275),
+  );
+  static const cochabambaNorte = Landmark(
+    slug: 'cocha_norte',
+    displayName: 'Cocha Norte / Las Palmas',
+    coords: LatLng(-17.358, -66.140),
+  );
+
   /// Todos los landmarks indexados por slug.
   static const Map<String, Landmark> bySlug = {
     'umss': umss,
@@ -101,6 +148,15 @@ class Landmarks {
     'sarco': sarco,
     'tupuraya': tupuraya,
     'aeropuerto': jorgeWilstermann,
+    'albarrancho': albarrancho,
+    'villa_busch': villaBusch,
+    'pacata': pacataAlta,
+    'tiquipaya': tiquipaya,
+    'sacaba': sacaba,
+    'vinto': vinto,
+    'colcapirhua': colcapirhua,
+    'quillacollo': quillacollo,
+    'cocha_norte': cochabambaNorte,
   };
 
   /// Lista de landmarks "principales" usados como contexto en el prompt

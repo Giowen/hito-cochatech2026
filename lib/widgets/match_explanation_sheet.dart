@@ -47,6 +47,39 @@ class _MatchExplanationSheetState
     if (property == null) return;
 
     final profile = ref.read(clientProfileProvider);
+    if (profile == null) {
+      if (mounted) {
+        setState(() {
+          _streamedText =
+              'Aún no has definido qué buscas. Toca el micrófono o '
+              'escribe tu búsqueda para que la IA evalúe esta propiedad.';
+          _streaming = false;
+        });
+      }
+      return;
+    }
+
+    // Si la propiedad fue descartada por el prefilter (no está en
+    // matchResults), no streameamos un score falseado del LLM. Mostramos
+    // mensaje claro: no pasó los criterios duros.
+    final matchesAsync = ref.read(matchResultsProvider);
+    final matches = matchesAsync.value ?? const [];
+    final isInMatches =
+        matches.any((m) => m.propertyId == widget.propertyId);
+    if (!isInMatches) {
+      if (mounted) {
+        setState(() {
+          _streamedText =
+              'Esta propiedad no pasó tus filtros iniciales — la modalidad, '
+              'el tipo de propiedad, o el mínimo de dormitorios no coinciden '
+              'con lo que pediste. Está visible en el mapa para que la '
+              'puedas explorar, pero no es un match recomendado.';
+          _streaming = false;
+        });
+      }
+      return;
+    }
+
     final service = ref.read(matchingServiceProvider);
 
     final buffer = StringBuffer();

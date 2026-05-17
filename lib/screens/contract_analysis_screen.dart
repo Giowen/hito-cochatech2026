@@ -6,15 +6,87 @@ import '../providers.dart';
 import '../theme.dart';
 
 /// "Tu Copiloto Legal Inmobiliario" — Acto 3 del pitch.
-/// Restyled con HitoTokens + Geist/Instrument Serif (Phase A.4 polish).
-class ContractAnalysisScreen extends ConsumerWidget {
+/// Dos modos:
+///   - Análisis: lee `contractAnalysisProvider(propertyId)` (real Groq + cache).
+///   - Borrador AI: usa `_draft` local generado on-demand desde el botón
+///     "Generar borrador" en el AppBar.
+class ContractAnalysisScreen extends ConsumerStatefulWidget {
   final String propertyId;
   const ContractAnalysisScreen({super.key, required this.propertyId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final analysisAsync = ref.watch(contractAnalysisProvider(propertyId));
+  ConsumerState<ContractAnalysisScreen> createState() =>
+      _ContractAnalysisScreenState();
+}
 
+class _ContractAnalysisScreenState
+    extends ConsumerState<ContractAnalysisScreen> {
+  ContractAnalysis? _draft;
+  String? _draftType;
+  bool _generating = false;
+  String? _generateError;
+
+  bool get _showingDraft => _draft != null;
+
+  Future<void> _openTypePicker() async {
+    if (_generating) return;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const _ContractTypePicker(),
+    );
+    if (selected == null || !mounted) return;
+    await _generate(selected);
+  }
+
+  Future<void> _generate(String contractType) async {
+    setState(() {
+      _generating = true;
+      _generateError = null;
+    });
+
+    try {
+      final propertiesAsync = ref.read(propertiesProvider);
+      final properties = propertiesAsync.value;
+      final property = properties == null
+          ? null
+          : {for (final p in properties) p.id: p}[widget.propertyId];
+      if (property == null) {
+        throw StateError('Property ${widget.propertyId} no encontrada');
+      }
+
+      final service = ref.read(contractAnalysisServiceProvider);
+      final draft = await service.generateContractDraft(
+        property: property,
+        contractType: contractType,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _draft = draft;
+        _draftType = contractType;
+        _generating = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _generating = false;
+        _generateError = 'Error generando borrador: $e';
+      });
+    }
+  }
+
+  void _backToAnalysis() {
+    setState(() {
+      _draft = null;
+      _draftType = null;
+      _generateError = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: HitoTokens.bone,
       appBar: AppBar(
@@ -23,7 +95,7 @@ class ContractAnalysisScreen extends ConsumerWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Tu Copiloto Legal',
+          _showingDraft ? 'Borrador AI' : 'Tu Copiloto Legal',
           style: GoogleFonts.instrumentSerif(
             fontSize: 22,
             color: HitoTokens.ink1,
@@ -34,16 +106,252 @@ class ContractAnalysisScreen extends ConsumerWidget {
         foregroundColor: HitoTokens.ink1,
         elevation: 0,
         scrolledUnderElevation: 0,
+        actions: [
+          if (_showingDraft)
+            TextButton.icon(
+              onPressed: _backToAnalysis,
+              icon: const Icon(Icons.arrow_back, size: 16),
+              label: Text(
+                'Análisis',
+                style: GoogleFonts.geist(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilledButton.icon(
+                onPressed: _generating ? null : _openTypePicker,
+                style: FilledButton.styleFrom(
+                  backgroundColor: HitoTokens.teal,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                ),
+                icon: _generating
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.auto_awesome, size: 16),
+                label: Text(
+                  _generating ? 'Generando...' : 'Generar borrador',
+                  style: GoogleFonts.geist(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
-      body: analysisAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('Error analizando contrato:\n$e'),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_generateError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, size: 36, color: HitoTokens.danger),
+              const SizedBox(height: 8),
+              Text(_generateError!, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: _openTypePicker,
+                child: const Text('Reintentar'),
+              ),
+            ],
           ),
         ),
-        data: (analysis) => _AnalysisBody(analysis: analysis),
+      );
+    }
+
+    if (_generating) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 14),
+            Text(
+              'Llama 3.3 redactando borrador ${_draftType ?? ""}...',
+              style: GoogleFonts.geist(
+                fontSize: 13,
+                color: HitoTokens.ink3,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_showingDraft) {
+      return _AnalysisBody(
+        analysis: _draft!,
+        isDraft: true,
+        draftType: _draftType,
+      );
+    }
+
+    final analysisAsync = ref.watch(contractAnalysisProvider(widget.propertyId));
+    return analysisAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Error analizando contrato:\n$e'),
+        ),
+      ),
+      data: (analysis) => _AnalysisBody(analysis: analysis, isDraft: false),
+    );
+  }
+}
+
+class _ContractTypePicker extends StatelessWidget {
+  const _ContractTypePicker();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Generar borrador',
+              style: GoogleFonts.instrumentSerif(
+                fontSize: 22,
+                color: HitoTokens.ink1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Elegí el tipo de contrato. La IA arma una plantilla estándar '
+              'con datos de la propiedad y placeholders para las partes.',
+              style: GoogleFonts.geist(
+                fontSize: 12,
+                color: HitoTokens.ink3,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 18),
+            _TypeOption(
+              type: 'anticretico',
+              label: 'Anticrético',
+              description:
+                  'Único en Bolivia. CC arts. 1429-1438. Entrega temporal de '
+                  'capital restituible.',
+              icon: Icons.swap_horiz_rounded,
+            ),
+            const SizedBox(height: 10),
+            _TypeOption(
+              type: 'compraventa',
+              label: 'Compra-venta',
+              description:
+                  'Transferencia definitiva de propiedad. CC arts. 584-735.',
+              icon: Icons.real_estate_agent_outlined,
+            ),
+            const SizedBox(height: 10),
+            _TypeOption(
+              type: 'alquiler',
+              label: 'Alquiler',
+              description:
+                  'Uso temporal con pago periódico. Ley General del Inquilinato.',
+              icon: Icons.calendar_month_outlined,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TypeOption extends StatelessWidget {
+  final String type;
+  final String label;
+  final String description;
+  final IconData icon;
+
+  const _TypeOption({
+    required this.type,
+    required this.label,
+    required this.description,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: HitoTokens.paper,
+      borderRadius: BorderRadius.circular(HitoTokens.rLg),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(HitoTokens.rLg),
+        onTap: () => Navigator.of(context).pop(type),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(HitoTokens.rLg),
+            border: Border.all(color: HitoTokens.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: HitoTokens.paper2,
+                  borderRadius: BorderRadius.circular(HitoTokens.rMd),
+                ),
+                child: Icon(icon, color: HitoTokens.teal, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: GoogleFonts.geist(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: HitoTokens.ink1,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      description,
+                      style: GoogleFonts.geist(
+                        fontSize: 11.5,
+                        color: HitoTokens.ink3,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: HitoTokens.ink4,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -51,7 +359,14 @@ class ContractAnalysisScreen extends ConsumerWidget {
 
 class _AnalysisBody extends StatelessWidget {
   final ContractAnalysis analysis;
-  const _AnalysisBody({required this.analysis});
+  final bool isDraft;
+  final String? draftType;
+
+  const _AnalysisBody({
+    required this.analysis,
+    required this.isDraft,
+    this.draftType,
+  });
 
   int _countByLevel(RiskLevel level) =>
       analysis.analyzedClauses.where((c) => c.riskLevel == level).length;
@@ -67,22 +382,32 @@ class _AnalysisBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _HeaderCard(contractType: analysis.contractType),
+          if (isDraft) _DraftBanner(contractType: draftType ?? 'contrato'),
+          if (isDraft) const SizedBox(height: 12),
+          _HeaderCard(
+            contractType: analysis.contractType,
+            isDraft: isDraft,
+          ),
           const SizedBox(height: 14),
           _RiskScorePanel(
             score: analysis.overallRiskScore,
             redCount: redCount,
             yellowCount: yellowCount,
             greenCount: greenCount,
+            isDraft: isDraft,
           ),
           if (analysis.gravamenCheck.isFlagged) ...[
             const SizedBox(height: 14),
             _GravamenAlert(check: analysis.gravamenCheck),
           ],
           const SizedBox(height: 14),
-          _AiSummaryCard(text: analysis.summary),
+          _AiSummaryCard(text: analysis.summary, isDraft: isDraft),
           const SizedBox(height: 18),
-          _SectionLabel('CLÁUSULAS ANALIZADAS · ${analysis.analyzedClauses.length}'),
+          _SectionLabel(
+            isDraft
+                ? 'CLÁUSULAS DEL BORRADOR · ${analysis.analyzedClauses.length}'
+                : 'CLÁUSULAS ANALIZADAS · ${analysis.analyzedClauses.length}',
+          ),
           const SizedBox(height: 10),
           _HighlightedContractView(
             contractText: analysis.contractText,
@@ -98,7 +423,7 @@ class _AnalysisBody extends StatelessWidget {
           ],
           if (analysis.fraudPatternsDetected.isNotEmpty) ...[
             const SizedBox(height: 6),
-            _SectionLabel('PATRONES DE FRAUDE DETECTADOS'),
+            const _SectionLabel('PATRONES DE FRAUDE DETECTADOS'),
             const SizedBox(height: 6),
             for (final pattern in analysis.fraudPatternsDetected)
               _BulletItem(
@@ -108,7 +433,9 @@ class _AnalysisBody extends StatelessWidget {
               ),
           ],
           const SizedBox(height: 18),
-          _SectionLabel('RECOMENDACIONES ACCIONABLES'),
+          _SectionLabel(
+            isDraft ? 'PRÓXIMOS PASOS' : 'RECOMENDACIONES ACCIONABLES',
+          ),
           const SizedBox(height: 6),
           for (final rec in analysis.recommendations)
             _BulletItem(
@@ -152,13 +479,53 @@ class _AnalysisBody extends StatelessWidget {
   }
 }
 
+class _DraftBanner extends StatelessWidget {
+  final String contractType;
+  const _DraftBanner({required this.contractType});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: HitoTokens.teal.withAlpha(20),
+        borderRadius: BorderRadius.circular(HitoTokens.rMd),
+        border: Border.all(color: HitoTokens.teal.withAlpha(100)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome, color: HitoTokens.teal, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'BORRADOR GENERADO · Plantilla estándar AI. Completá '
+              'placeholders [CORCHETES] antes de firmar.',
+              style: GoogleFonts.geist(
+                fontSize: 11,
+                color: HitoTokens.teal2,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HeaderCard extends StatelessWidget {
   final String contractType;
-  const _HeaderCard({required this.contractType});
+  final bool isDraft;
+  const _HeaderCard({required this.contractType, required this.isDraft});
 
   @override
   Widget build(BuildContext context) {
     final isAnticretico = contractType == 'anticretico';
+    final typeLabel = contractType.isEmpty
+        ? 'contrato'
+        : '${contractType[0].toUpperCase()}${contractType.substring(1)}';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -176,7 +543,11 @@ class _HeaderCard extends StatelessWidget {
               color: HitoTokens.paper2,
               borderRadius: BorderRadius.circular(HitoTokens.rMd),
             ),
-            child: Icon(Icons.shield_outlined, color: HitoTokens.teal, size: 24),
+            child: Icon(
+              isDraft ? Icons.auto_awesome : Icons.shield_outlined,
+              color: HitoTokens.teal,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -184,7 +555,9 @@ class _HeaderCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Contrato de ${isAnticretico ? "Anticrético" : "${contractType[0].toUpperCase()}${contractType.substring(1)}"}',
+                  isDraft
+                      ? 'Borrador de $typeLabel'
+                      : 'Contrato de $typeLabel',
                   style: GoogleFonts.geist(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -195,7 +568,9 @@ class _HeaderCard extends StatelessWidget {
                 Text(
                   isAnticretico
                       ? 'CC Bolivia arts. 1429-1438 · instrumento único de Bolivia'
-                      : 'Análisis legal automático con AI boliviana',
+                      : isDraft
+                          ? 'Plantilla AI conforme a derecho boliviano'
+                          : 'Análisis legal automático con AI boliviana',
                   style: GoogleFonts.geist(
                     fontSize: 11,
                     color: HitoTokens.ink3,
@@ -215,12 +590,14 @@ class _RiskScorePanel extends StatelessWidget {
   final int redCount;
   final int yellowCount;
   final int greenCount;
+  final bool isDraft;
 
   const _RiskScorePanel({
     required this.score,
     required this.redCount,
     required this.yellowCount,
     required this.greenCount,
+    required this.isDraft,
   });
 
   Color _color() {
@@ -251,7 +628,7 @@ class _RiskScorePanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'RIESGO',
+                isDraft ? 'NIVEL DE PLANTILLA' : 'RIESGO',
                 style: GoogleFonts.geist(
                   fontSize: 10,
                   letterSpacing: 1.0,
@@ -288,7 +665,7 @@ class _RiskScorePanel extends StatelessWidget {
                       borderRadius: BorderRadius.circular(HitoTokens.r2xl),
                     ),
                     child: Text(
-                      _label(),
+                      isDraft ? 'Limpio' : _label(),
                       style: GoogleFonts.geist(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -411,7 +788,8 @@ class _GravamenAlert extends StatelessWidget {
 
 class _AiSummaryCard extends StatelessWidget {
   final String text;
-  const _AiSummaryCard({required this.text});
+  final bool isDraft;
+  const _AiSummaryCard({required this.text, required this.isDraft});
 
   @override
   Widget build(BuildContext context) {
@@ -430,7 +808,7 @@ class _AiSummaryCard extends StatelessWidget {
               Icon(Icons.auto_awesome, color: HitoTokens.teal, size: 16),
               const SizedBox(width: 6),
               Text(
-                'AI análisis ejecutivo',
+                isDraft ? 'Resumen del borrador' : 'AI análisis ejecutivo',
                 style: GoogleFonts.geist(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -484,11 +862,11 @@ class _HighlightedContractView extends StatelessWidget {
   Color _bgFor(RiskLevel level) {
     switch (level) {
       case RiskLevel.high:
-        return const Color(0x66F87171); // danger ~40% alpha
+        return const Color(0x66F87171);
       case RiskLevel.medium:
-        return const Color(0x55F59E0B); // warning ~33% alpha
+        return const Color(0x55F59E0B);
       case RiskLevel.low:
-        return const Color(0x4410B981); // success ~27% alpha
+        return const Color(0x4410B981);
     }
   }
 
