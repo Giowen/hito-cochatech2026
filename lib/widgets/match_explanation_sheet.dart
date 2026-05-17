@@ -296,25 +296,131 @@ class _Header extends StatelessWidget {
         .split('_')
         .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
         .join(' ');
+    final photoUrl =
+        property.photos.isNotEmpty ? property.photos.first : null;
+    final hasPhoto = photoUrl != null && photoUrl.startsWith('http');
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          width: 44,
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          child: Text(
-            '$score',
-            style: GoogleFonts.geist(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
+        // Hero image (cuando hay) — proporción landscape similar a card de
+        // listing. El score badge va flotando encima esquina inferior-izq
+        // para que el primer foco visual sea la propiedad.
+        if (hasPhoto) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(HitoTokens.rLg),
+            child: Stack(
+              children: [
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.network(
+                    photoUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: HitoTokens.paper3,
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        size: 48,
+                        color: HitoTokens.ink4,
+                      ),
+                    ),
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return Container(
+                        color: HitoTokens.paper3,
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child:
+                              CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // Gradient sutil abajo para legibilidad del badge.
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 70,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.55),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 12,
+                  bottom: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(HitoTokens.rMd),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color.fromRGBO(0, 0, 0, 0.25),
+                          blurRadius: 6,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.star_rounded,
+                            size: 16, color: Colors.white),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$score% compatible',
+                          style: GoogleFonts.geist(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
+          const SizedBox(height: 12),
+        ],
+        Row(
+          children: [
+            // Si hay foto, el score ya está en el hero; el círculo lateral
+            // se mantiene solo para reforzar y para fallback sin foto.
+            if (!hasPhoto)
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                child: Text(
+                  '$score',
+                  style: GoogleFonts.geist(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            if (!hasPhoto) const SizedBox(width: 12),
+            Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -369,9 +475,11 @@ class _Header extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ],
-    );
+        ),       // closes Expanded
+          ],      // closes inner Row children
+        ),        // closes inner Row
+      ],          // closes outer Column children
+    );           // closes outer Column
   }
 }
 

@@ -105,7 +105,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
         setState(() {
           _state = _SheetState.error;
           _error =
-              'Whisper no detectó audio. Hablá más fuerte y vuelve a probar.';
+              'Whisper no detectó audio. Habla más fuerte y vuelve a probar.';
         });
         return;
       }

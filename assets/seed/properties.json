@@ -27,7 +27,9 @@
       "garage",
       "vigilancia_zona"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p01.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Coincide en zona de mayor seguridad (índice Cala Cala 8.7/10).",
@@ -67,7 +69,9 @@
       "gym",
       "vista_panoramica"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p02.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Excelente para Sofía y Mateo (cerca colegios).",
@@ -108,7 +112,9 @@
       "garage",
       "patio_trasero"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p03.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Patio amplio + zona tranquila.",
@@ -146,7 +152,9 @@
       "garage",
       "patio"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p04.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Precio 12% por debajo del comparable de zona.",
@@ -188,7 +196,9 @@
       "quincho",
       "garage_triple"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p05.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Excede tu rango por $18k.",
@@ -227,7 +237,9 @@
       "terraza",
       "patio"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p06.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Solo anticrético — no es opción de compra.",
@@ -265,7 +277,9 @@
       "dos_plantas",
       "garage"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p07.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Buen precio pero requiere refacción de cocina (~$8k).",
@@ -304,7 +318,9 @@
       "gym",
       "ascensor"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p08.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Por encima de rango.",
@@ -344,7 +360,9 @@
       "patio_colonial",
       "restaurada_2021"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p09.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Sin parqueo — criterio bloqueante para ti.",
@@ -382,7 +400,9 @@
       "jardin_grande",
       "garage_triple"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p10.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Trayecto a oficina excede tu límite (32 min sin tráfico).",
@@ -423,7 +443,9 @@
       "garage_doble",
       "orientacion_norte"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p11.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Cumple los 4 criterios principales.",
@@ -460,7 +482,9 @@
     "amenities": [
       "local_comercial"
     ],
-    "photos": [],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p12.jpg"
+    ],
     "cochabamba_tags": [],
     "ai_notes": [
       "Tiene local comercial — no buscas eso.",
@@ -472,5 +496,450 @@
     "listing_status": "activa",
     "description": "Casa mixta con local comercial en Villa Busch. Buen precio.",
     "has_lien": false
+  },
+  {
+    "id": "p13",
+    "address": "Edif. Cala Cala Plaza, calle Mexico, Cochabamba",
+    "title": "Departamento moderno - Cala Cala Plaza",
+    "lat": -17.3818,
+    "lng": -66.161,
+    "neighborhood": "cala_cala",
+    "price_usd_paralelo": 142000,
+    "area_m2": 110,
+    "bedrooms": 2,
+    "bathrooms": 2,
+    "parking": 1,
+    "type": "departamento",
+    "listing_mode": "venta",
+    "supported_transactions": [
+      "venta"
+    ],
+    "year_built": 2022,
+    "age_years": 4,
+    "amenities": [
+      "ascensor",
+      "gym",
+      "seguridad"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p13.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 6,
+    "image": "gradient-2",
+    "listing_status": "activa",
+    "description": "Departamento de 2 dormitorios en edificio nuevo de Cala Cala. Vista a la plaza, gym compartido.",
+    "has_lien": false,
+    "price_bob": 1448400
+  },
+  {
+    "id": "p14",
+    "address": "Edif. Torre Sucre, Recoleta, Cochabamba",
+    "title": "Departamento Torre Sucre - piso 11",
+    "lat": -17.3768,
+    "lng": -66.1412,
+    "neighborhood": "recoleta",
+    "price_usd_paralelo": 195000,
+    "area_m2": 175,
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "parking": 2,
+    "type": "departamento",
+    "listing_mode": "venta",
+    "supported_transactions": [
+      "venta"
+    ],
+    "year_built": 2023,
+    "age_years": 3,
+    "amenities": [
+      "ascensor",
+      "vista_panoramica",
+      "seguridad_24h"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p14.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 18,
+    "image": "gradient-4",
+    "listing_status": "activa",
+    "description": "Penthouse de 3 dormitorios en torre premium Recoleta. Vista al cerro San Pedro.",
+    "has_lien": false,
+    "price_bob": 1989000
+  },
+  {
+    "id": "p15",
+    "address": "Av. Heroinas esq. Junin, Centro, Cochabamba",
+    "title": "Departamento Centro - frente a plaza",
+    "lat": -17.392,
+    "lng": -66.1568,
+    "neighborhood": "centro",
+    "price_usd_paralelo": 88000,
+    "area_m2": 72,
+    "bedrooms": 2,
+    "bathrooms": 1,
+    "parking": 0,
+    "type": "departamento",
+    "listing_mode": "venta",
+    "supported_transactions": [
+      "venta",
+      "anticretico"
+    ],
+    "anticretico_bob": 220000,
+    "year_built": 2018,
+    "age_years": 8,
+    "amenities": [
+      "ascensor",
+      "amoblado"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p15.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 30,
+    "image": "gradient-7",
+    "listing_status": "activa",
+    "description": "Departamento centrico, ideal estudiantes o profesionales solos. Cerca a UMSS.",
+    "has_lien": false,
+    "price_bob": 897600
+  },
+  {
+    "id": "p16",
+    "address": "Calle Bolivar 234, Sarco, Cochabamba",
+    "title": "Casa familiar - Sarco",
+    "lat": -17.3698,
+    "lng": -66.1742,
+    "neighborhood": "sarco",
+    "price_usd_paralelo": 128000,
+    "area_m2": 195,
+    "lot_m2": 240,
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "parking": 1,
+    "type": "casa",
+    "listing_mode": "venta",
+    "supported_transactions": [
+      "venta",
+      "anticretico"
+    ],
+    "anticretico_bob": 195000,
+    "year_built": 2014,
+    "age_years": 12,
+    "amenities": [
+      "jardin",
+      "garage"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p16.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 22,
+    "image": "gradient-5",
+    "listing_status": "activa",
+    "description": "Casa de 3 dormitorios en zona Sarco con jardin y garage privado.",
+    "has_lien": false,
+    "price_bob": 1305600
+  },
+  {
+    "id": "p17",
+    "address": "Calle Aroma 567, Villa Busch, Cochabamba",
+    "title": "Casa con piscina - Villa Busch",
+    "lat": -17.4172,
+    "lng": -66.1342,
+    "neighborhood": "villa_busch",
+    "price_usd_paralelo": 245000,
+    "area_m2": 320,
+    "lot_m2": 480,
+    "bedrooms": 4,
+    "bathrooms": 4,
+    "parking": 3,
+    "type": "casa",
+    "listing_mode": "venta",
+    "supported_transactions": [
+      "venta"
+    ],
+    "year_built": 2019,
+    "age_years": 7,
+    "amenities": [
+      "piscina",
+      "quincho",
+      "jardin_amplio",
+      "garage"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p17.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 12,
+    "image": "gradient-8",
+    "listing_status": "activa",
+    "description": "Casa de 4 dormitorios con piscina y quincho. Zona residencial Villa Busch.",
+    "has_lien": false,
+    "price_bob": 2499000
+  },
+  {
+    "id": "p18",
+    "address": "Calle Antezana, Queru Queru, Cochabamba",
+    "title": "Casa Queru - calle tranquila",
+    "lat": -17.372,
+    "lng": -66.1485,
+    "neighborhood": "queru",
+    "price_usd_paralelo": 168000,
+    "area_m2": 215,
+    "lot_m2": 280,
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "parking": 2,
+    "type": "casa",
+    "listing_mode": "venta",
+    "supported_transactions": [
+      "venta",
+      "anticretico"
+    ],
+    "anticretico_bob": 245000,
+    "year_built": 2017,
+    "age_years": 9,
+    "amenities": [
+      "patio",
+      "garage_doble"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p18.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 14,
+    "image": "gradient-3",
+    "listing_status": "activa",
+    "description": "Casa de 3 dormitorios en calle sin salida - bajo trafico.",
+    "has_lien": false,
+    "price_bob": 1713600
+  },
+  {
+    "id": "p19",
+    "address": "Av. Beijing 1244, Tupuraya, Cochabamba",
+    "title": "Casa Tupuraya - moderna",
+    "lat": -17.394,
+    "lng": -66.1295,
+    "neighborhood": "tupuraya",
+    "price_usd_paralelo": 175000,
+    "area_m2": 230,
+    "lot_m2": 290,
+    "bedrooms": 3,
+    "bathrooms": 3,
+    "parking": 2,
+    "type": "casa",
+    "listing_mode": "venta",
+    "supported_transactions": [
+      "venta"
+    ],
+    "year_built": 2020,
+    "age_years": 6,
+    "amenities": [
+      "jardin",
+      "garage",
+      "vigilancia_zona"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p19.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 9,
+    "image": "gradient-6",
+    "listing_status": "activa",
+    "description": "Casa moderna de 3 dormitorios en zona en desarrollo de Tupuraya.",
+    "has_lien": false,
+    "price_bob": 1785000
+  },
+  {
+    "id": "p20",
+    "address": "Calle Lanza, Cala Cala, Cochabamba",
+    "title": "Anticretico Cala Cala - 3 dorm",
+    "lat": -17.3801,
+    "lng": -66.1635,
+    "neighborhood": "cala_cala",
+    "price_usd_paralelo": 0,
+    "area_m2": 165,
+    "lot_m2": 200,
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "parking": 1,
+    "type": "casa",
+    "listing_mode": "anticretico",
+    "supported_transactions": [
+      "anticretico"
+    ],
+    "anticretico_bob": 408000,
+    "year_built": 2016,
+    "age_years": 10,
+    "amenities": [
+      "patio",
+      "garage"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p20.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 5,
+    "image": "gradient-1",
+    "listing_status": "activa",
+    "description": "Casa para anticretico de 3 dormitorios. Capital 40 mil USD. Zona centrica Cala Cala.",
+    "has_lien": false,
+    "price_bob": 0
+  },
+  {
+    "id": "p21",
+    "address": "Av. America Oeste, Queru Queru, Cochabamba",
+    "title": "Anticretico Queru - depto familiar",
+    "lat": -17.3725,
+    "lng": -66.1503,
+    "neighborhood": "queru",
+    "price_usd_paralelo": 0,
+    "area_m2": 95,
+    "bedrooms": 2,
+    "bathrooms": 1,
+    "parking": 1,
+    "type": "departamento",
+    "listing_mode": "anticretico",
+    "supported_transactions": [
+      "anticretico"
+    ],
+    "anticretico_bob": 285000,
+    "year_built": 2021,
+    "age_years": 5,
+    "amenities": [
+      "ascensor"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p21.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 11,
+    "image": "gradient-9",
+    "listing_status": "activa",
+    "description": "Departamento anticretico de 2 dormitorios. Capital 28 mil USD.",
+    "has_lien": false,
+    "price_bob": 0
+  },
+  {
+    "id": "p22",
+    "address": "Zona Tiquipaya, km 4, Cochabamba",
+    "title": "Terreno Tiquipaya - 600m2",
+    "lat": -17.3382,
+    "lng": -66.2095,
+    "neighborhood": "tiquipaya",
+    "price_usd_paralelo": 52000,
+    "area_m2": 0,
+    "lot_m2": 600,
+    "bedrooms": 0,
+    "bathrooms": 0,
+    "parking": 0,
+    "type": "terreno",
+    "listing_mode": "venta",
+    "supported_transactions": [
+      "venta"
+    ],
+    "year_built": null,
+    "age_years": 0,
+    "amenities": [
+      "servicios_basicos"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p22.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 40,
+    "image": "gradient-11",
+    "listing_status": "activa",
+    "description": "Terreno de 600m2 en Tiquipaya. Ideal para construccion. Servicios basicos en frente.",
+    "has_lien": false,
+    "price_bob": 530400
+  },
+  {
+    "id": "p23",
+    "address": "Calle Tarata, Cala Cala alta, Cochabamba",
+    "title": "Casa premium - Cala Cala alta",
+    "lat": -17.384,
+    "lng": -66.1655,
+    "neighborhood": "cala_cala",
+    "price_usd_paralelo": 385000,
+    "area_m2": 420,
+    "lot_m2": 580,
+    "bedrooms": 5,
+    "bathrooms": 5,
+    "parking": 3,
+    "type": "casa",
+    "listing_mode": "venta",
+    "supported_transactions": [
+      "venta"
+    ],
+    "year_built": 2023,
+    "age_years": 3,
+    "amenities": [
+      "piscina",
+      "quincho",
+      "jardin_amplio",
+      "garage_triple",
+      "seguridad_24h",
+      "vista_panoramica"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p23.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 7,
+    "image": "gradient-10",
+    "listing_status": "activa",
+    "description": "Casa premium de 5 dormitorios en Cala Cala alta. Piscina climatizada, jardin de 350m2.",
+    "has_lien": false,
+    "price_bob": 3927000
+  },
+  {
+    "id": "p24",
+    "address": "Calle Sucre, Cocha Norte, Cochabamba",
+    "title": "Casa economica - Cocha Norte",
+    "lat": -17.358,
+    "lng": -66.1395,
+    "neighborhood": "cocha_norte",
+    "price_usd_paralelo": 76000,
+    "area_m2": 130,
+    "lot_m2": 170,
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "parking": 1,
+    "type": "casa",
+    "listing_mode": "venta",
+    "supported_transactions": [
+      "venta",
+      "anticretico"
+    ],
+    "anticretico_bob": 145000,
+    "year_built": 2013,
+    "age_years": 13,
+    "amenities": [
+      "patio",
+      "garage"
+    ],
+    "photos": [
+      "https://ireqtgwedmlweufijzyl.supabase.co/storage/v1/object/public/property-images/p24.jpg"
+    ],
+    "cochabamba_tags": [],
+    "ai_notes": [],
+    "listed_days": 35,
+    "image": "gradient-12",
+    "listing_status": "activa",
+    "description": "Casa de 3 dormitorios, zona en crecimiento. Buen acceso a centro.",
+    "has_lien": false,
+    "price_bob": 775200
   }
 ]

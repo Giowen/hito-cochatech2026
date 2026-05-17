@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,6 +54,13 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
   bool _submitting = false;
   String? _submitError;
   String? _geocodeError;
+
+  // ── Photos state ─────────────────────────────────────────────
+  /// Bytes de las imágenes seleccionadas localmente (preview antes de
+  /// upload). Compresión + upload se hacen en `_submit()` para no
+  /// pegarle a la red por cada selección.
+  final List<({Uint8List bytes, String name})> _localImages = [];
+  bool _uploadingImages = false;
 
   bool get _hasCoords =>
       _latCtrl.text.trim().isNotEmpty && _lngCtrl.text.trim().isNotEmpty;
@@ -129,8 +139,31 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
       } else {
         _canonicalAddress = null;
         _geocodeError =
-            'No se pudo obtener la dirección del pin. Editá manualmente.';
+            'No se pudo obtener la dirección del pin. Edita manualmente.';
       }
+    });
+  }
+
+  Future<void> _pickImages() async {
+    if (_uploadingImages || _submitting) return;
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: true,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty || !mounted) return;
+    final picked = result.files
+        .where((f) => f.bytes != null)
+        .map((f) => (bytes: f.bytes!, name: f.name))
+        .toList();
+    setState(() {
+      _localImages.addAll(picked);
+    });
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _localImages.removeAt(index);
     });
   }
 
@@ -160,6 +193,36 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
       });
       return;
     }
+
+    // ── Upload de imágenes (compresión + Supabase Storage) ─────────
+    // Antes de armar el Property, subimos las imágenes locales y
+    // recolectamos URLs públicas. Si falla, abortamos el insert.
+    final newPropId = PropertyManagementService.newPropertyId();
+    final photoUrls = <String>[];
+    if (_localImages.isNotEmpty) {
+      setState(() => _uploadingImages = true);
+      try {
+        final uploader = ref.read(propertyImageUploaderProvider);
+        for (final img in _localImages) {
+          final url = await uploader.compressAndUpload(
+            bytes: img.bytes,
+            propertyId: newPropId,
+          );
+          if (url.isNotEmpty) photoUrls.add(url);
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _submitting = false;
+          _uploadingImages = false;
+          _submitError =
+              'Error subiendo imágenes: $e. Reintenta o continúa sin fotos.';
+        });
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _uploadingImages = false);
+    }
     // year_built defensive: tryParse + bounds [1900, año actual].
     // Antes usaba int.parse → crasheaba si el campo tenía letras/símbolos.
     final yearBuiltRaw = int.tryParse(_yearBuilt.text.trim());
@@ -170,7 +233,7 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
         ? yearBuiltRaw
         : null;
     final property = Property(
-      id: PropertyManagementService.newPropertyId(),
+      id: newPropId,
       address: _address.text.trim(),
       lat: lat,
       lng: lng,
@@ -184,7 +247,7 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
       amenities: const [],
       ageYears:
           yearBuilt == null ? 0 : (currentYear - yearBuilt).clamp(0, 200),
-      photos: const [],
+      photos: photoUrls,
       cochabambaTags: const [],
       listingStatus: 'activa',
       description: _description.text.trim(),
@@ -286,6 +349,8 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
         const SizedBox(height: 14),
         _transactionCard(),
         const SizedBox(height: 14),
+        _photosCard(),
+        const SizedBox(height: 14),
         _descriptionCard(),
         if (_submitError != null) ...[
           const SizedBox(height: 12),
@@ -308,6 +373,8 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
         _characteristicsCard(),
         const SizedBox(height: 14),
         _transactionCard(),
+        const SizedBox(height: 14),
+        _photosCard(),
         const SizedBox(height: 14),
         _descriptionCard(),
         if (_submitError != null) ...[
@@ -723,6 +790,101 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
     );
   }
 
+  Widget _photosCard() {
+    return _Card(
+      title: 'FOTOS DE LA PROPIEDAD',
+      icon: Icons.photo_library_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_localImages.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Sube 1 a 6 fotos. Se comprimen automáticamente antes de '
+                'subir (max 1600px, JPEG calidad 78). Tamaño objetivo: '
+                '~150-300 KB por imagen.',
+                style: GoogleFonts.geist(
+                  fontSize: 11.5,
+                  color: HitoTokens.ink3,
+                  height: 1.5,
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              height: 100,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _localImages.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final img = _localImages[i];
+                  return Stack(
+                    children: [
+                      Container(
+                        width: 100,
+                        height: 100,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(HitoTokens.rMd),
+                          border: Border.all(color: HitoTokens.border),
+                        ),
+                        child: Image.memory(
+                          img.bytes,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () => _removeImage(i),
+                          child: Container(
+                            width: 22,
+                            height: 22,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: HitoTokens.danger,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _uploadingImages || _submitting ? null : _pickImages,
+            icon: Icon(
+              _localImages.isEmpty
+                  ? Icons.add_photo_alternate_outlined
+                  : Icons.add_rounded,
+              size: 18,
+            ),
+            label: Text(
+              _localImages.isEmpty
+                  ? 'Elegir imágenes…'
+                  : 'Agregar más (${_localImages.length} seleccionadas)',
+              style: GoogleFonts.geist(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _descriptionCard() {
     return _Card(
       title: 'OTROS',
@@ -854,9 +1016,11 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
               )
             : const Icon(Icons.check_rounded, size: 18),
         label: Text(
-          _submitting
-              ? 'Guardando + AI scoring...'
-              : 'Crear propiedad',
+          _uploadingImages
+              ? 'Comprimiendo y subiendo fotos...'
+              : _submitting
+                  ? 'Guardando + AI scoring...'
+                  : 'Crear propiedad',
           style: GoogleFonts.geist(
             fontSize: 14,
             fontWeight: FontWeight.w700,

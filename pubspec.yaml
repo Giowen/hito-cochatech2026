@@ -52,6 +52,7 @@ dependencies:
   file_picker: ^8.1.4
   syncfusion_flutter_pdf: ^27.2.5
   url_launcher: ^6.3.2
+  image: ^4.5.4         # compresion JPEG cross-platform en Dart puro
 
 dev_dependencies:
   flutter_test:

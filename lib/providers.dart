@@ -18,6 +18,7 @@ import 'services/asset_storage.dart';
 import 'services/contract_analysis_service.dart';
 import 'services/lead_qualification_service.dart';
 import 'services/matching_service.dart' show MatchingService, MatchingBatch;
+import 'services/property_image_uploader.dart';
 import 'services/property_management_service.dart';
 import 'services/session_storage.dart';
 import 'services/valuation_service.dart';
@@ -254,6 +255,12 @@ final propertyManagementServiceProvider = Provider<PropertyManagementService>(
   (ref) => PropertyManagementService(
     repo: ref.watch(propertyRepositoryProvider),
   ),
+);
+
+/// PropertyImageUploader — compresión client-side + upload a Supabase Storage
+/// (bucket `property-images`). Usado por add_property_screen.
+final propertyImageUploaderProvider = Provider<PropertyImageUploader>(
+  (ref) => PropertyImageUploader(),
 );
 
 /// VoiceToProfileService — Whisper (Groq) + LLM extraction. Convierte voz

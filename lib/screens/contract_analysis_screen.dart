@@ -422,7 +422,7 @@ class _ContractTypePicker extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Elegí el tipo de contrato. La IA arma una plantilla estándar '
+              'Elige el tipo de contrato. La IA arma una plantilla estándar '
               'con datos de la propiedad y placeholders para las partes.',
               style: GoogleFonts.geist(
                 fontSize: 12,

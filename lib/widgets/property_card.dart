@@ -6,6 +6,41 @@ import '../models/property.dart';
 import '../providers.dart';
 import '../theme.dart';
 
+/// Wrapper que decide entre foto real (NetworkImage del Supabase Storage)
+/// y placeholder gradient. Mantiene la API simple para los callers.
+class _PropertyThumb extends StatelessWidget {
+  final Property property;
+  const _PropertyThumb({required this.property});
+
+  @override
+  Widget build(BuildContext context) {
+    final photoUrl = property.photos.isNotEmpty ? property.photos.first : null;
+    if (photoUrl != null && photoUrl.startsWith('http')) {
+      return Container(
+        width: 52,
+        height: 52,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: HitoTokens.paper3,
+          borderRadius: BorderRadius.circular(HitoTokens.rMd),
+        ),
+        child: Image.network(
+          photoUrl,
+          fit: BoxFit.cover,
+          // Si falla la carga (offline, cors, etc), caemos al gradient stub.
+          errorBuilder: (_, __, ___) =>
+              _PhotoStub(image: property.image, type: property.type),
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return _PhotoStub(image: property.image, type: property.type);
+          },
+        ),
+      );
+    }
+    return _PhotoStub(image: property.image, type: property.type);
+  }
+}
+
 /// PropertyCard compacta — claude-design canonical style.
 /// Round teal compat badge + small photo stub + title/specs/price + ANTICRÉTICO chip.
 class PropertyCard extends ConsumerWidget {
@@ -56,7 +91,7 @@ class PropertyCard extends ConsumerWidget {
               children: [
                 _CompatBadge(score: match.compatibilityPercent),
                 const SizedBox(width: 10),
-                _PhotoStub(image: property.image, type: property.type),
+                _PropertyThumb(property: property),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _Details(property: property),
