@@ -23,16 +23,9 @@ abstract class PropertyRepository {
   /// Retorna la propiedad por id, o null si no existe.
   Future<Property?> getById(String id);
 
-  // ── Phase 2 API (descomenta cuando entre Drift+Supabase) ──
-  // /// Stream de cambios en la propiedad — para UI reactiva offline-first.
-  // Stream<Property?> watchById(String id);
-  //
-  // /// Guarda mutación localmente y la encola para sync con Supabase.
-  // Future<void> save(Property property);
-  //
-  // /// Trigger explícito de sync incremental — útil pre-pitch para garantizar
-  // /// estado actualizado antes de mostrar la app a un jurado/cliente.
-  // Future<SyncResult> syncIncremental();
+  /// Inserta una nueva propiedad. Si la implementación cachea (Drift), el
+  /// cache se actualiza tras el insert remoto exitoso.
+  Future<void> insert(Property property);
 }
 
 /// Impl para MVP: carga `assets/seed/properties.json` y cachea en memoria.
@@ -59,6 +52,12 @@ class InMemoryPropertyRepository implements PropertyRepository {
       if (p.id == id) return p;
     }
     return null;
+  }
+
+  @override
+  Future<void> insert(Property property) async {
+    final all = await getAll();
+    _cache = [property, ...all];
   }
 
   /// Resetea el cache (útil para tests).

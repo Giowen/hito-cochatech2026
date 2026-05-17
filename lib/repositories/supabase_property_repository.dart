@@ -41,6 +41,16 @@ class SupabasePropertyRepository implements PropertyRepository {
     return Property.fromJson(_normalizeRow(rows.first));
   }
 
+  @override
+  Future<void> insert(Property property) async {
+    final row = property.toJson();
+    // El schema espera int para listed_days; las listas como TEXT[] (Postgres
+    // acepta JSON arrays). Limpiar campos derivados que la DB autopopula.
+    row.remove('image'); // tiene default 'gradient-1'
+    row['listing_status'] = 'activa';
+    await _client.from('properties').insert(row);
+  }
+
   /// Postgres BIGINT puede llegar como int o num; arrays como `List<dynamic>`.
   /// Normalizar a los tipos que Property.fromJson espera.
   Map<String, dynamic> _normalizeRow(Map<String, dynamic> row) {
@@ -106,5 +116,12 @@ class FallbackPropertyRepository implements PropertyRepository {
       debugPrint('[Hito] Primary repo.getById failed, falling back: $e');
       return fallback.getById(id);
     }
+  }
+
+  @override
+  Future<void> insert(Property property) async {
+    // Insert SIEMPRE va al primary (Supabase real). El fallback InMemory
+    // local no debería recibir writes — si primary falla, el insert falla.
+    await primary.insert(property);
   }
 }

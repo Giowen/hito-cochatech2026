@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers.dart';
+import '../screens/add_property_screen.dart';
 import '../theme.dart';
 
 /// Top bar global — ubicación + mercado activo + vista María/Juan + actions.
@@ -46,6 +47,9 @@ class HitoTopBar extends ConsumerWidget {
                 _MarketActivePill(),
               ],
               const Spacer(),
+              if (viewMode == ViewMode.agent)
+                _NewPropertyButton(compact: !wide),
+              if (viewMode == ViewMode.agent) const SizedBox(width: 8),
               _ViewToggle(viewMode: viewMode),
               const SizedBox(width: 8),
               if (wide)
@@ -63,6 +67,53 @@ class HitoTopBar extends ConsumerWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _NewPropertyButton extends StatelessWidget {
+  final bool compact;
+  const _NewPropertyButton({required this.compact});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: HitoTokens.teal,
+      borderRadius: BorderRadius.circular(HitoTokens.r2xl),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(HitoTokens.r2xl),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<bool>(
+              builder: (_) => const AddPropertyScreen(),
+              fullscreenDialog: true,
+            ),
+          );
+        },
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 12,
+            vertical: 7,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.add, size: 16, color: Colors.white),
+              if (!compact) ...[
+                const SizedBox(width: 4),
+                Text(
+                  'Nueva propiedad',
+                  style: GoogleFonts.geist(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

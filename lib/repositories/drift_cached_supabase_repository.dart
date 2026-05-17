@@ -75,6 +75,14 @@ class DriftCachedSupabaseRepository implements PropertyRepository {
     }
   }
 
+  @override
+  Future<void> insert(Property property) async {
+    await remote.insert(property);
+    // Optimistic local update: agrega a Drift inmediatamente para no esperar
+    // un refresh completo. El próximo getAll lo retorna desde cache.
+    await db.upsertProperties([property]);
+  }
+
   /// Refresh cache desde Supabase sin bloquear UI.
   Future<void> _refreshInBackground() async {
     try {

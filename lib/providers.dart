@@ -15,6 +15,7 @@ import 'repositories/valuation_cache_repository.dart';
 import 'services/asset_storage.dart';
 import 'services/contract_analysis_service.dart';
 import 'services/matching_service.dart';
+import 'services/property_management_service.dart';
 import 'services/valuation_service.dart';
 
 /// Notifier para el profile del cliente activo. Permite mutación vía .update().
@@ -84,6 +85,15 @@ final propertyRepositoryProvider = Provider<PropertyRepository>((ref) {
 /// Carga todas las propiedades vía repository.
 final propertiesProvider = FutureProvider<List<Property>>(
   (ref) => ref.read(propertyRepositoryProvider).getAll(),
+);
+
+/// PropertyManagementService — agent CRUD operations (insert + geocode).
+/// El UI screen invalida `propertiesProvider` tras un insert exitoso,
+/// disparando re-scoring automático con Groq de la nueva propiedad.
+final propertyManagementServiceProvider = Provider<PropertyManagementService>(
+  (ref) => PropertyManagementService(
+    repo: ref.watch(propertyRepositoryProvider),
+  ),
 );
 
 /// Resultados de matching ordenados descending por compatibility.
