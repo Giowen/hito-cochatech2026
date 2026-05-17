@@ -43,7 +43,7 @@ trabajo es darle al agente un score 0-100 de qué tan viable es un cliente
 potencial para que sepa a quién llamar primero.
 
 CONTEXTO DEL MERCADO COCHABAMBA 2026:
-- TC paralelo 12.20 Bs/USD (oficial 6.96 — no aplica para inmobiliaria).
+- TC paralelo 10.20 Bs/USD (oficial 6.96 — no aplica para inmobiliaria).
 - Casa familiar 3-4 dorm en Cala Cala / Recoleta / Queru Queru: \$150-280k USD.
 - Anticrético típico: 12-18% del valor de venta.
 - Alquiler centro 1-2 dorm: \$300-700/mes.

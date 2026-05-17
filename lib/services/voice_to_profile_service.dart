@@ -62,7 +62,7 @@ describió en lenguaje natural lo que busca. Convierte a JSON estructurado.
 INTERPRETACIÓN DE PRESUPUESTO (regla crítica):
 - "120k", "120 mil", "ciento veinte mil", "120000" → asume USD por DEFAULT.
 - Solo si menciona explícitamente "bolivianos", "Bs", "BOB" → es BOB.
-  Convertir con TC paralelo 12.20: "300 mil bolivianos" → \$24590 USD.
+  Convertir con TC paralelo 10.20: "300 mil bolivianos" → \$24590 USD.
 - "k" = mil. "M" = millón. "120k" = 120000.
 - En Cochabamba 2026 propiedades familiares cuestan típicamente \$80k-\$300k USD.
   Si el número extraído es <\$30k USD, casi seguro el usuario habló en BOB.

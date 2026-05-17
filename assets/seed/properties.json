@@ -6,7 +6,7 @@
     "lat": -17.388,
     "lng": -66.158,
     "neighborhood": "cala_cala",
-    "price_bob": 2623000,
+    "price_bob": 2193000,
     "price_usd_paralelo": 215000,
     "area_m2": 280,
     "lot_m2": 320,
@@ -15,11 +15,18 @@
     "parking": 2,
     "type": "casa",
     "listing_mode": "venta",
-    "supported_transactions": ["venta", "anticretico"],
+    "supported_transactions": [
+      "venta",
+      "anticretico"
+    ],
     "anticretico_bob": 320000,
     "year_built": 2018,
     "age_years": 8,
-    "amenities": ["patio", "garage", "vigilancia_zona"],
+    "amenities": [
+      "patio",
+      "garage",
+      "vigilancia_zona"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [
@@ -40,9 +47,9 @@
     "address": "Edif. Torres del Sur, Recoleta, Cochabamba",
     "title": "Departamento con vista — Edif. Torres del Sur",
     "lat": -17.376,
-    "lng": -66.140,
+    "lng": -66.14,
     "neighborhood": "recoleta",
-    "price_bob": 2171600,
+    "price_bob": 1815600,
     "price_usd_paralelo": 178000,
     "area_m2": 165,
     "bedrooms": 3,
@@ -50,10 +57,16 @@
     "parking": 2,
     "type": "departamento",
     "listing_mode": "venta",
-    "supported_transactions": ["venta"],
+    "supported_transactions": [
+      "venta"
+    ],
     "year_built": 2022,
     "age_years": 4,
-    "amenities": ["ascensor", "gym", "vista_panoramica"],
+    "amenities": [
+      "ascensor",
+      "gym",
+      "vista_panoramica"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [
@@ -74,7 +87,7 @@
     "lat": -17.382,
     "lng": -66.143,
     "neighborhood": "queru",
-    "price_bob": 2379000,
+    "price_bob": 1989000,
     "price_usd_paralelo": 195000,
     "area_m2": 240,
     "lot_m2": 380,
@@ -83,11 +96,18 @@
     "parking": 2,
     "type": "casa",
     "listing_mode": "venta",
-    "supported_transactions": ["venta", "anticretico"],
+    "supported_transactions": [
+      "venta",
+      "anticretico"
+    ],
     "anticretico_bob": 280000,
     "year_built": 2015,
     "age_years": 11,
-    "amenities": ["jardin_amplio", "garage", "patio_trasero"],
+    "amenities": [
+      "jardin_amplio",
+      "garage",
+      "patio_trasero"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [
@@ -108,7 +128,7 @@
     "lat": -17.395,
     "lng": -66.155,
     "neighborhood": "tupuraya",
-    "price_bob": 1732400,
+    "price_bob": 1448400,
     "price_usd_paralelo": 142000,
     "area_m2": 195,
     "lot_m2": 240,
@@ -117,10 +137,15 @@
     "parking": 2,
     "type": "casa",
     "listing_mode": "venta",
-    "supported_transactions": ["venta"],
+    "supported_transactions": [
+      "venta"
+    ],
     "year_built": 2020,
     "age_years": 6,
-    "amenities": ["garage", "patio"],
+    "amenities": [
+      "garage",
+      "patio"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [
@@ -139,9 +164,9 @@
     "address": "Las Palmas, Cocha Norte, Cochabamba",
     "title": "Casa de campo — Las Palmas",
     "lat": -17.358,
-    "lng": -66.140,
+    "lng": -66.14,
     "neighborhood": "norte",
-    "price_bob": 3269600,
+    "price_bob": 2733600,
     "price_usd_paralelo": 268000,
     "area_m2": 340,
     "lot_m2": 720,
@@ -150,11 +175,19 @@
     "parking": 3,
     "type": "casa",
     "listing_mode": "venta",
-    "supported_transactions": ["venta", "anticretico"],
+    "supported_transactions": [
+      "venta",
+      "anticretico"
+    ],
     "anticretico_bob": 410000,
     "year_built": 2019,
     "age_years": 7,
-    "amenities": ["piscina", "jardin_grande", "quincho", "garage_triple"],
+    "amenities": [
+      "piscina",
+      "jardin_grande",
+      "quincho",
+      "garage_triple"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [
@@ -172,8 +205,8 @@
     "id": "p06",
     "address": "Pacata Alta, Cochabamba",
     "title": "Casa con terraza — Pacata Alta",
-    "lat": -17.420,
-    "lng": -66.170,
+    "lat": -17.42,
+    "lng": -66.17,
     "neighborhood": "pacata",
     "price_bob": 0,
     "price_usd_paralelo": 0,
@@ -184,11 +217,16 @@
     "parking": 1,
     "type": "casa",
     "listing_mode": "anticretico",
-    "supported_transactions": ["anticretico"],
+    "supported_transactions": [
+      "anticretico"
+    ],
     "anticretico_bob": 180000,
     "year_built": 2017,
     "age_years": 9,
-    "amenities": ["terraza", "patio"],
+    "amenities": [
+      "terraza",
+      "patio"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [
@@ -209,7 +247,7 @@
     "lat": -17.408,
     "lng": -66.165,
     "neighborhood": "sarco",
-    "price_bob": 1512800,
+    "price_bob": 1264800,
     "price_usd_paralelo": 124000,
     "area_m2": 168,
     "lot_m2": 200,
@@ -218,10 +256,15 @@
     "parking": 1,
     "type": "casa",
     "listing_mode": "venta",
-    "supported_transactions": ["venta"],
+    "supported_transactions": [
+      "venta"
+    ],
     "year_built": 2014,
     "age_years": 12,
-    "amenities": ["dos_plantas", "garage"],
+    "amenities": [
+      "dos_plantas",
+      "garage"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [
@@ -240,9 +283,9 @@
     "address": "Edif. Cordillera, Cala Cala, Cochabamba",
     "title": "Penthouse — Edif. Cordillera",
     "lat": -17.388,
-    "lng": -66.160,
+    "lng": -66.16,
     "neighborhood": "cala_cala",
-    "price_bob": 3599000,
+    "price_bob": 3009000,
     "price_usd_paralelo": 295000,
     "area_m2": 280,
     "bedrooms": 4,
@@ -250,10 +293,17 @@
     "parking": 3,
     "type": "departamento",
     "listing_mode": "venta",
-    "supported_transactions": ["venta"],
+    "supported_transactions": [
+      "venta"
+    ],
     "year_built": 2023,
     "age_years": 3,
-    "amenities": ["penthouse", "terraza_panoramica", "gym", "ascensor"],
+    "amenities": [
+      "penthouse",
+      "terraza_panoramica",
+      "gym",
+      "ascensor"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [
@@ -274,7 +324,7 @@
     "lat": -17.395,
     "lng": -66.157,
     "neighborhood": "centro",
-    "price_bob": 2049600,
+    "price_bob": 1713600,
     "price_usd_paralelo": 168000,
     "area_m2": 220,
     "lot_m2": 280,
@@ -283,11 +333,17 @@
     "parking": 0,
     "type": "casa",
     "listing_mode": "venta",
-    "supported_transactions": ["venta", "anticretico"],
+    "supported_transactions": [
+      "venta",
+      "anticretico"
+    ],
     "anticretico_bob": 240000,
     "year_built": 1958,
     "age_years": 68,
-    "amenities": ["patio_colonial", "restaurada_2021"],
+    "amenities": [
+      "patio_colonial",
+      "restaurada_2021"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [
@@ -308,7 +364,7 @@
     "lat": -17.337,
     "lng": -66.207,
     "neighborhood": "tiquipaya",
-    "price_bob": 1927600,
+    "price_bob": 1611600,
     "price_usd_paralelo": 158000,
     "area_m2": 260,
     "lot_m2": 520,
@@ -317,10 +373,15 @@
     "parking": 3,
     "type": "casa",
     "listing_mode": "venta",
-    "supported_transactions": ["venta"],
+    "supported_transactions": [
+      "venta"
+    ],
     "year_built": 2021,
     "age_years": 5,
-    "amenities": ["jardin_grande", "garage_triple"],
+    "amenities": [
+      "jardin_grande",
+      "garage_triple"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [
@@ -341,7 +402,7 @@
     "lat": -17.382,
     "lng": -66.145,
     "neighborhood": "queru",
-    "price_bob": 2293600,
+    "price_bob": 1917600,
     "price_usd_paralelo": 188000,
     "area_m2": 230,
     "lot_m2": 290,
@@ -350,11 +411,18 @@
     "parking": 2,
     "type": "casa",
     "listing_mode": "venta",
-    "supported_transactions": ["venta", "anticretico"],
+    "supported_transactions": [
+      "venta",
+      "anticretico"
+    ],
     "anticretico_bob": 290000,
     "year_built": 2016,
     "age_years": 10,
-    "amenities": ["esquinera", "garage_doble", "orientacion_norte"],
+    "amenities": [
+      "esquinera",
+      "garage_doble",
+      "orientacion_norte"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [
@@ -375,7 +443,7 @@
     "lat": -17.418,
     "lng": -66.135,
     "neighborhood": "villa_busch",
-    "price_bob": 1634800,
+    "price_bob": 1366800,
     "price_usd_paralelo": 134000,
     "area_m2": 180,
     "lot_m2": 200,
@@ -384,10 +452,14 @@
     "parking": 1,
     "type": "casa",
     "listing_mode": "venta",
-    "supported_transactions": ["venta"],
+    "supported_transactions": [
+      "venta"
+    ],
     "year_built": 2010,
     "age_years": 16,
-    "amenities": ["local_comercial"],
+    "amenities": [
+      "local_comercial"
+    ],
     "photos": [],
     "cochabamba_tags": [],
     "ai_notes": [

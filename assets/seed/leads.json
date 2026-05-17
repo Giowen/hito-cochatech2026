@@ -7,15 +7,18 @@
       "client_phone": "+591 70415664",
       "profile": {
         "id": "voice-lead-001",
-        "budget_min": 1830000,
-        "budget_max": 2440000,
+        "budget_min": 1530000,
+        "budget_max": 2040000,
         "transaction_type": "compra",
         "desired_lat": -17.3815,
         "desired_lng": -66.1623,
         "radius_km": 2.5,
         "min_bedrooms": 3,
         "min_area_m2": 180,
-        "required_tags": ["familia_segura", "cerca_universidad"],
+        "required_tags": [
+          "familia_segura",
+          "cerca_universidad"
+        ],
         "voice_input_transcript": "Hola María, te paso lo que busco. Familia con dos hijos universitarios, queremos casa en Cala Cala o cerca de UMSS, mínimo tres dormitorios, presupuesto hasta 200 mil dólares, urgente porque los chicos empiezan facultad en enero."
       },
       "qualification_score": 88,
@@ -35,15 +38,17 @@
       "client_phone": "+591 70415664",
       "profile": {
         "id": "voice-lead-002",
-        "budget_min": 366000,
-        "budget_max": 488000,
+        "budget_min": 306000,
+        "budget_max": 408000,
         "transaction_type": "anticretico",
         "desired_lat": -17.3712,
         "desired_lng": -66.1492,
         "radius_km": 3.0,
         "min_bedrooms": 2,
         "min_area_m2": 80,
-        "required_tags": ["acepta_anticretico"],
+        "required_tags": [
+          "acepta_anticretico"
+        ],
         "voice_input_transcript": "Busco un anticrético en Queru Queru o por ahí, dos dormitorios alcanza, tengo unos 30 mil 40 mil dólares para anticrético."
       },
       "qualification_score": 71,
@@ -63,11 +68,11 @@
       "client_phone": "+591 70415664",
       "profile": {
         "id": "voice-lead-003",
-        "budget_min": 305000,
-        "budget_max": 488000,
+        "budget_min": 255000,
+        "budget_max": 408000,
         "transaction_type": "alquiler",
         "desired_lat": -17.3935,
-        "desired_lng": -66.1570,
+        "desired_lng": -66.157,
         "radius_km": 1.5,
         "min_bedrooms": 1,
         "min_area_m2": 40,
@@ -91,15 +96,18 @@
       "client_phone": "+591 70415664",
       "profile": {
         "id": "voice-lead-004",
-        "budget_min": 1830000,
-        "budget_max": 2562000,
+        "budget_min": 1530000,
+        "budget_max": 2142000,
         "transaction_type": "compra",
         "desired_lat": -17.376,
-        "desired_lng": -66.140,
+        "desired_lng": -66.14,
         "radius_km": 3.0,
         "min_bedrooms": 3,
         "min_area_m2": 150,
-        "required_tags": ["familia_segura", "cerca_recoleta"],
+        "required_tags": [
+          "familia_segura",
+          "cerca_recoleta"
+        ],
         "voice_input_transcript": "Buenas, soy Ana, busco casa familiar en Recoleta o cerca, tres dormitorios mínimo, hasta 210 mil dólares, ya vimos dos propiedades el mes pasado pero no nos convencieron."
       },
       "qualification_score": 82,

@@ -296,7 +296,7 @@ class _LeadCard extends StatelessWidget {
     final tx = lead.profile.transactionType;
     final dorm = lead.profile.minBedrooms;
     final budgetK =
-        (lead.profile.budgetMax / 1000 / 12.20).round(); // BOB→USD k
+        (lead.profile.budgetMax / 1000 / 10.20).round(); // BOB→USD k
     final tags = lead.profile.requiredTags;
     return [
       tx,

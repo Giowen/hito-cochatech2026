@@ -42,7 +42,7 @@ class SupabaseValuationCacheRepository implements ValuationCacheRepository {
         estimatedValueUsdParalelo:
             (row['estimated_value_usd_paralelo'] as num? ?? 0).toInt(),
         usdParaleloRateUsed:
-            (row['usd_paralelo_rate_used'] as num? ?? 12.20).toDouble(),
+            (row['usd_paralelo_rate_used'] as num? ?? 10.20).toDouble(),
         comparables:
             ((row['comparables'] as List?) ?? const []).cast<String>(),
         confidenceScore:

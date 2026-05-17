@@ -40,7 +40,7 @@ class _MatchExplanationSheetState
       if (mounted) {
         setState(() {
           _streamedText =
-              'Cargando inventario… volvé a abrir esta tarjeta en un momento.';
+              'Cargando inventario… vuelve a abrir esta tarjeta en un momento.';
           _streaming = false;
         });
       }
@@ -97,7 +97,7 @@ class _MatchExplanationSheetState
 
     // Animar SIEMPRE localmente desde el match ya scoreado.
     //
-    // Antes: explainStreaming consultaba el cache → si miss, abría stream a
+    // Antes: explainStreaming consultaba el cache → si miss, abrea stream a
     // Groq cuyos chunks llegan en bursts grandes (5-30 chars por chunk) → el
     // efecto "typing" se rompía y el texto aparecía de golpe. Ahora siempre
     // tenemos match.explanation en memoria (lo trae el matchResultsProvider).

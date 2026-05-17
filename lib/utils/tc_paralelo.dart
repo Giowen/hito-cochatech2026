@@ -3,8 +3,8 @@
 /// Valuaciones inmobiliarias sin esto son ficción (anchor del Acto 2).
 class TcParalelo {
   /// Tasa paralela asumida para demo y valuaciones hardcoded.
-  /// Aligned con claude-design canonical data (12.20 Bs/USD).
-  static const double rate = 12.20;
+  /// Última actualización: mayo 2026 — 10.20 Bs/USD.
+  static const double rate = 10.20;
 
   /// Tasa oficial BCB (referencia, no usada en valuaciones reales).
   static const double oficial = 6.96;

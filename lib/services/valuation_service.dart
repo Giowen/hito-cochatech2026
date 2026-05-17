@@ -40,7 +40,7 @@ Eres un tasador inmobiliario senior en Cochabamba, Bolivia, con 20 años de
 experiencia operando en 2025-2026.
 
 CONTEXTO MACRO obligatorio:
-- TC paralelo USD/BOB ~12.20 (vs oficial 6.96 — el oficial no aplica para
+- TC paralelo USD/BOB ~10.20 (vs oficial 6.96 — el oficial no aplica para
   inmobiliaria, todo se mueve en paralelo o dólares).
 - Costos de construcción al alza por inflación de insumos importados.
 - Plusvalía zonal típica anual: Cala Cala +6-8%, Recoleta +5%, Queru Queru

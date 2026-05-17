@@ -53,7 +53,9 @@ class ClientProfile {
   ///   v10: filtro extendido (no cumple con/no se menciona/no confirma),
   ///       fingerprint coarse para tiebreaker, regla parqueos explícita,
   ///       considerations debe quedar vacía si no hay nada honesto.
-  static const _promptVersion = 'v10';
+  ///   v11: TC paralelo actualizado 12.20 → 10.20 Bs/USD (mayo 2026).
+  ///       Cambia conversiones BOB↔USD en prompts y caps; invalida cache.
+  static const _promptVersion = 'v11';
 
   /// Hash determinístico de los campos que afectan la decisión de matching.
   /// Incluye `_promptVersion` para invalidar cache cuando cambia el prompt.
@@ -110,7 +112,7 @@ class ClientProfile {
   /// oficina en Recoleta, considera anticrético.
   static const ClientProfile demoJuan = ClientProfile(
     id: 'demo-juan',
-    // $200k-$220k USD via TC paralelo 12.20 → 2,440K-2,684K BOB
+    // $200k-$220k USD via TC paralelo 10.20 → 2,440K-2,684K BOB
     budgetMin: 2440000,
     budgetMax: 2684000,
     transactionType: 'compra',

@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS valuation_reports (
   estimated_value_usd_high      INTEGER,
   listed_value_bob              BIGINT NOT NULL,
   delta_percent                 DOUBLE PRECISION NOT NULL,
-  usd_paralelo_rate_used        DOUBLE PRECISION NOT NULL DEFAULT 12.20,
+  usd_paralelo_rate_used        DOUBLE PRECISION NOT NULL DEFAULT 10.20,
   comparables                   TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   comparable_details            TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   factors                       TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
