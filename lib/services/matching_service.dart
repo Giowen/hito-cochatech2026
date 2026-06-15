@@ -966,6 +966,41 @@ porcentaje. Mencionas factores clave: distancia, presupuesto, bedrooms.
     throw lastError ?? Exception('All models in chain failed');
   }
 
+  /// True si la propiedad satisface un required_tag del cliente. Mira
+  /// `amenities` (slug real del listing) + atributos físicos (parking),
+  /// no solo `cochabamba_tags` — que en el seed actual va vacío. Sin esto
+  /// todo tag pedido ("garage", "patio") salía como faltante y hundía el
+  /// score, y el LLM no veía el garaje (solo el conteo de parqueos).
+  bool _propertySatisfiesTag(Property property, String tag) {
+    if (tag == 'acepta_anticretico') return property.supportsAnticretico;
+    if (property.cochabambaTags.contains(tag)) return true;
+    final am = property.amenities;
+    bool has(String s) => am.any((a) => a.contains(s));
+    switch (tag) {
+      case 'garage':
+      case 'cochera':
+        return property.parking > 0 || has('garage') || has('garaje');
+      case 'patio':
+      case 'jardin':
+        return has('patio') || has('jardin');
+      case 'vigilancia':
+      case 'familia_segura':
+      case 'zona_tranquila':
+        return has('vigilancia');
+      case 'piscina':
+        return has('piscina');
+      case 'terraza':
+      case 'balcon':
+        return has('terraza') || has('balcon');
+      case 'quincho':
+        return has('quincho') || has('parrillero');
+      case 'vista_panoramica':
+        return has('vista');
+      default:
+        return has(tag);
+    }
+  }
+
   /// Construye el bloque de contexto con HECHOS explícitos y verificados,
   /// + comparaciones con el perfil del cliente. Evita que el LLM invente
   /// (ej. decir "no cumple dormitorios" cuando los supera).
@@ -1009,10 +1044,10 @@ porcentaje. Mencionas factores clave: distancia, presupuesto, bedrooms.
         : '  - Modalidades: ${supports.join(", ")} (cliente quiere $wantedTx → NO SOPORTADA)';
 
     final tagsOverlap = profile.requiredTags
-        .where((t) => property.cochabambaTags.contains(t))
+        .where((t) => _propertySatisfiesTag(property, t))
         .toList();
     final tagsMissing = profile.requiredTags
-        .where((t) => !property.cochabambaTags.contains(t))
+        .where((t) => !_propertySatisfiesTag(property, t))
         .toList();
 
     final hasSpecificLocation = profile.radiusKm < 50;
@@ -1030,7 +1065,9 @@ porcentaje. Mencionas factores clave: distancia, presupuesto, bedrooms.
         '$budgetLine\n'
         '$bedroomsLine\n'
         '  - Área construida: ${property.areaM2} m²\n'
-        '  - Parqueos: ${property.parking}\n'
+        '  - Baños: ${property.bathrooms}\n'
+        '  - Parqueos: ${property.parking}${property.parking > 0 ? " (tiene garage/cochera)" : ""}\n'
+        '  - Amenidades: ${property.amenities.isEmpty ? "n/a" : property.amenities.join(", ")}\n'
         '$modalityLine\n'
         '  - Año construcción: ${property.yearBuilt ?? "n/a"}\n'
         '  - Tags cliente cumplidos: ${tagsOverlap.isEmpty ? "ninguno" : tagsOverlap.join(", ")}\n'
@@ -1126,8 +1163,7 @@ porcentaje. Mencionas factores clave: distancia, presupuesto, bedrooms.
     final tagsMatched = <String>[];
     final tagsMissing = <String>[];
     for (final tag in profile.requiredTags) {
-      if (property.cochabambaTags.contains(tag) ||
-          (tag == 'acepta_anticretico' && property.supportsAnticretico)) {
+      if (_propertySatisfiesTag(property, tag)) {
         tagsMatched.add(tag);
       } else {
         tagsMissing.add(tag);
