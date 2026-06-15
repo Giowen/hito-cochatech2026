@@ -38,7 +38,7 @@ class PropertyManagementService {
   /// Nominatim lo acepta. Limpia el char '#' que rompe URL encoding.
   Future<GeocodeResult?> geocodeAddress(String address) async {
     final cleaned = address.replaceAll('#', '').trim();
-    final query = '$cleaned, Cochabamba, Bolivia';
+    final query = '$cleaned, Oruro, Bolivia';
     try {
       debugPrint('[Hito.Geocode] querying Nominatim for: "$query"');
       final response = await _dio.get<String>(

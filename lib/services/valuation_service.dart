@@ -36,15 +36,16 @@ class ValuationService {
         _cache = cache ?? NoOpValuationCacheRepository();
 
   static const _systemPrompt = '''
-Eres un tasador inmobiliario senior en Cochabamba, Bolivia, con 20 años de
+Eres un tasador inmobiliario senior en Oruro, Bolivia, con 20 años de
 experiencia operando en 2025-2026.
 
 CONTEXTO MACRO obligatorio:
 - TC paralelo USD/BOB ~10.20 (vs oficial 6.96 — el oficial no aplica para
   inmobiliaria, todo se mueve en paralelo o dólares).
 - Costos de construcción al alza por inflación de insumos importados.
-- Plusvalía zonal típica anual: Cala Cala +6-8%, Recoleta +5%, Queru Queru
-  +4-5%, Sarco +3%, periferia +2-3%.
+- Plusvalía zonal típica anual: La Floresta +5-7%, Centro +4-5%, Agua de
+  Castilla +4%, Zona Norte +3-4%, periferia (Challacollo, Sebastián Pagador,
+  Villa Esperanza) +2-3%.
 - Antigüedad importa: año <5 → premium +5%, año >25 → -5% a -10%.
 
 Te entregan una propiedad target + 5 comparables del mismo tipo. Estima

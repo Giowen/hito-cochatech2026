@@ -56,7 +56,7 @@ class VoiceToProfileService {
   }
 
   static const _extractionSystemPrompt = '''
-Eres un parser de búsquedas inmobiliarias en Cochabamba, Bolivia. El usuario
+Eres un parser de búsquedas inmobiliarias en Oruro, Bolivia. El usuario
 describió en lenguaje natural lo que busca. Convierte a JSON estructurado.
 
 INTERPRETACIÓN DE PRESUPUESTO (regla crítica):
@@ -64,18 +64,17 @@ INTERPRETACIÓN DE PRESUPUESTO (regla crítica):
 - Solo si menciona explícitamente "bolivianos", "Bs", "BOB" → es BOB.
   Convertir con TC paralelo 10.20: "300 mil bolivianos" → \$24590 USD.
 - "k" = mil. "M" = millón. "120k" = 120000.
-- En Cochabamba 2026 propiedades familiares cuestan típicamente \$80k-\$300k USD.
-  Si el número extraído es <\$30k USD, casi seguro el usuario habló en BOB.
+- En Oruro 2026 propiedades familiares cuestan típicamente \$50k-\$160k USD.
+  Si el número extraído es <\$15k USD, casi seguro el usuario habló en BOB.
   Si es >\$1M USD, casi seguro habló en BOB. Validá rangos sanos.
 
 LANDMARKS válidos para "desired_landmark":
-- umss, upb, ucb, univalle, umsfx (universidades)
-- recoleta (zona de oficinas)
-- centro (plaza principal)
-- cala_cala, queru_queru, sarco, tupuraya, villa_busch, pacata,
-  albarrancho, cocha_norte (barrios residenciales)
-- tiquipaya, sacaba, vinto, colcapirhua, quillacollo (municipios cercanos)
-- aeropuerto (Jorge Wilstermann)
+- uto, fni, ucb (universidades)
+- centro (Plaza 10 de Febrero), mercado (zona comercial), hospital (servicios)
+- socavon, faro, estadio (hitos de la ciudad)
+- la_floresta, agua_de_castilla, norte, sud, este, san_jose,
+  villa_esperanza, las_kantutas, sebastian_pagador, challacollo (barrios)
+- aeropuerto (Juan Mendoza), terminal (terminal de buses)
 
 Si el usuario menciona una zona/barrio que NO está en esta lista, devuelve
 el slug normalizado en minúsculas con guiones bajos (ej. "barrio_nuevo")
@@ -216,7 +215,7 @@ OUTPUT JSON estricto (sin markdown, solo el objeto):
   /// catálogo Landmarks. Restringe búsqueda a Bolivia.
   Future<LatLng?> _geocodeLandmark(String slug) async {
     try {
-      final query = '${slug.replaceAll('_', ' ')}, Cochabamba, Bolivia';
+      final query = '${slug.replaceAll('_', ' ')}, Oruro, Bolivia';
       debugPrint('[Hito.Voice] geocoding unknown landmark: "$query"');
       final response = await _dio.get<String>(
         'https://nominatim.openstreetmap.org/search',

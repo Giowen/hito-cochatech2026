@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 import '../models/property.dart';
 
@@ -62,6 +63,52 @@ class InMemoryPropertyRepository implements PropertyRepository {
 
   /// Resetea el cache (útil para tests).
   void invalidate() => _cache = null;
+}
+
+/// FallbackPropertyRepository — wrap dos repos. Primary first; si falla (o
+/// devuelve vacío en getAll), usa fallback. Útil para Appwrite + InMemory
+/// safety net en demo.
+class FallbackPropertyRepository implements PropertyRepository {
+  final PropertyRepository primary;
+  final PropertyRepository fallback;
+
+  FallbackPropertyRepository({
+    required this.primary,
+    required this.fallback,
+  });
+
+  @override
+  Future<List<Property>> getAll() async {
+    try {
+      final result = await primary.getAll();
+      if (result.isEmpty) {
+        debugPrint('[Hito] Primary repo returned empty, using fallback');
+        return fallback.getAll();
+      }
+      return result;
+    } catch (e, stack) {
+      debugPrint('[Hito] Primary repo failed, falling back to seed JSON: $e');
+      debugPrint(stack.toString());
+      return fallback.getAll();
+    }
+  }
+
+  @override
+  Future<Property?> getById(String id) async {
+    try {
+      return await primary.getById(id);
+    } catch (e) {
+      debugPrint('[Hito] Primary repo.getById failed, falling back: $e');
+      return fallback.getById(id);
+    }
+  }
+
+  @override
+  Future<void> insert(Property property) async {
+    // Insert SIEMPRE va al primary (backend real). El fallback InMemory local
+    // no debería recibir writes — si primary falla, el insert falla.
+    await primary.insert(property);
+  }
 }
 
 // ── Phase 2 sketch (no implementar en MVP) ────────────────────────

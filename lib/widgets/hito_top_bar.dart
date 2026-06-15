@@ -50,7 +50,7 @@ class HitoTopBar extends ConsumerWidget {
               if (wide) ...[
                 const SizedBox(width: 6),
                 Text(
-                  'Cochabamba',
+                  'Oruro',
                   style: GoogleFonts.geist(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,

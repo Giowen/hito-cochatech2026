@@ -62,11 +62,14 @@ class Env {
       case 'OPENROUTER_API_KEY':
         const v = String.fromEnvironment('OPENROUTER_API_KEY');
         return v.isEmpty ? null : v;
-      case 'SUPABASE_URL':
-        const v = String.fromEnvironment('SUPABASE_URL');
+      case 'APPWRITE_ENDPOINT':
+        const v = String.fromEnvironment('APPWRITE_ENDPOINT');
         return v.isEmpty ? null : v;
-      case 'SUPABASE_ANON_KEY':
-        const v = String.fromEnvironment('SUPABASE_ANON_KEY');
+      case 'APPWRITE_PROJECT_ID':
+        const v = String.fromEnvironment('APPWRITE_PROJECT_ID');
+        return v.isEmpty ? null : v;
+      case 'APPWRITE_DATABASE_ID':
+        const v = String.fromEnvironment('APPWRITE_DATABASE_ID');
         return v.isEmpty ? null : v;
       case 'R2_ACCOUNT_ID':
         const v = String.fromEnvironment('R2_ACCOUNT_ID');

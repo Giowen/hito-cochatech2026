@@ -2,29 +2,28 @@ import 'package:flutter/foundation.dart';
 import '../db/hito_db.dart';
 import '../models/property.dart';
 import 'property_repository.dart';
-import 'supabase_property_repository.dart';
 
-/// DriftCachedSupabaseRepository — offline-first wrapper.
+/// DriftCachedRepository — offline-first wrapper sobre cualquier
+/// `PropertyRepository` remoto (Appwrite en producción).
 ///
 /// Strategy "Stale While Revalidate":
 ///   1. `getAll()` retorna Drift cache inmediato (fast UI, funciona offline).
-///   2. Background fetch desde Supabase → upsert a Drift → no-op si datos iguales.
-///   3. Si cache vacío (cold start), bloquea esperando Supabase → cachea → retorna.
-///   4. Si Supabase falla y cache vacío → throw → FallbackPropertyRepository
+///   2. Background fetch desde el remoto → replaceAll a Drift.
+///   3. Si cache vacío (cold start), bloquea esperando el remoto → cachea → retorna.
+///   4. Si el remoto falla y cache vacío → throw → FallbackPropertyRepository
 ///      arriba detecta y usa InMemoryPropertyRepository (seed JSON).
 ///
-/// Esta arquitectura es CRÍTICA domingo: si el venue tiene WiFi inestable
-/// o Supabase tiene latency alta durante el pitch, Drift sirve data en <50ms.
-/// El refresh de Supabase ocurre async en background — no bloquea la demo.
-class DriftCachedSupabaseRepository implements PropertyRepository {
-  final SupabasePropertyRepository remote;
+/// Esta arquitectura es CRÍTICA en demo: si el venue tiene WiFi inestable o el
+/// backend tiene latencia alta, Drift sirve data en <50ms. El refresh ocurre
+/// async en background — no bloquea.
+class DriftCachedRepository implements PropertyRepository {
+  final PropertyRepository remote;
   final HitoDatabase db;
 
   /// TTL del cache antes de considerarlo "stale" y forzar revalidation.
-  /// 5 min es OK para MVP — listings no cambian segundo a segundo.
   static const Duration cacheTtl = Duration(minutes: 5);
 
-  DriftCachedSupabaseRepository({
+  DriftCachedRepository({
     required this.remote,
     required this.db,
   });
@@ -37,14 +36,14 @@ class DriftCachedSupabaseRepository implements PropertyRepository {
         DateTime.now().difference(lastCachedAt) > cacheTtl;
 
     if (cached.isEmpty) {
-      // Cold start: necesitamos data, esperamos Supabase
+      // Cold start: necesitamos data, esperamos el remoto.
       try {
         final fromRemote = await remote.getAll();
         await db.replaceAll(fromRemote);
         return fromRemote;
       } catch (e) {
-        debugPrint('[Hito] Cold-start Supabase fetch failed: $e');
-        rethrow; // FallbackPropertyRepository arriba lo cacha
+        debugPrint('[Hito] Cold-start remote fetch failed: $e');
+        rethrow; // FallbackPropertyRepository arriba lo cacha.
       }
     }
 
@@ -62,7 +61,6 @@ class DriftCachedSupabaseRepository implements PropertyRepository {
     final cached = await db.getPropertyById(id);
     if (cached != null) return cached;
 
-    // No en cache → fetch remoto
     try {
       final fromRemote = await remote.getById(id);
       if (fromRemote != null) {
@@ -70,7 +68,7 @@ class DriftCachedSupabaseRepository implements PropertyRepository {
       }
       return fromRemote;
     } catch (e) {
-      debugPrint('[Hito] getById Supabase failed: $e');
+      debugPrint('[Hito] getById remote failed: $e');
       rethrow;
     }
   }
@@ -78,12 +76,11 @@ class DriftCachedSupabaseRepository implements PropertyRepository {
   @override
   Future<void> insert(Property property) async {
     await remote.insert(property);
-    // Optimistic local update: agrega a Drift inmediatamente para no esperar
-    // un refresh completo. El próximo getAll lo retorna desde cache.
+    // Optimistic local update: agrega a Drift inmediatamente.
     await db.upsertProperties([property]);
   }
 
-  /// Refresh cache desde Supabase sin bloquear UI.
+  /// Refresh cache desde el remoto sin bloquear UI.
   Future<void> _refreshInBackground() async {
     try {
       final fromRemote = await remote.getAll();
@@ -94,7 +91,7 @@ class DriftCachedSupabaseRepository implements PropertyRepository {
     }
   }
 
-  /// Trigger explícito de sync — útil pre-pitch para garantizar data fresca.
+  /// Trigger explícito de sync — útil pre-demo para garantizar data fresca.
   Future<void> syncNow() async {
     await _refreshInBackground();
   }

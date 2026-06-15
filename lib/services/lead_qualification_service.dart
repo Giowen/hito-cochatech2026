@@ -38,16 +38,16 @@ class LeadQualificationService {
       : _groqClient = groqClient ?? GroqClient();
 
   static const _systemPrompt = '''
-Eres un evaluador de leads inmobiliarios en Cochabamba, Bolivia (2026). Tu
+Eres un evaluador de leads inmobiliarios en Oruro, Bolivia (2026). Tu
 trabajo es darle al agente un score 0-100 de qué tan viable es un cliente
 potencial para que sepa a quién llamar primero.
 
-CONTEXTO DEL MERCADO COCHABAMBA 2026:
+CONTEXTO DEL MERCADO ORURO 2026:
 - TC paralelo 10.20 Bs/USD (oficial 6.96 — no aplica para inmobiliaria).
-- Casa familiar 3-4 dorm en Cala Cala / Recoleta / Queru Queru: \$150-280k USD.
+- Casa familiar 3-4 dorm en La Floresta / Agua de Castilla / Zona Norte: \$70-160k USD.
 - Anticrético típico: 12-18% del valor de venta.
-- Alquiler centro 1-2 dorm: \$300-700/mes.
-- Departamento moderno 2-3 dorm Recoleta: \$130-220k.
+- Alquiler centro 1-2 dorm: \$200-450/mes.
+- Departamento moderno 2-3 dorm La Floresta / Centro: \$50-110k.
 
 CRITERIOS DE SCORING (suma 100 puntos máximo):
 

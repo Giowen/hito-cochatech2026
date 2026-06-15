@@ -21,7 +21,7 @@ class PropertiesMap extends ConsumerStatefulWidget {
 
 class _PropertiesMapState extends ConsumerState<PropertiesMap> {
   late final MapController _mapController;
-  static final _defaultCenter = LatLng(-17.395, -66.150);
+  static final _defaultCenter = LatLng(-17.972, -67.113);
 
   @override
   void initState() {

@@ -1,0 +1,14 @@
+{
+  "name": "hito-appwrite-setup",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "One-time setup + seed scripts for migrating Hito to Appwrite Cloud",
+  "scripts": {
+    "setup": "node --env-file=.env setup.mjs",
+    "seed": "node --env-file=.env seed.mjs"
+  },
+  "dependencies": {
+    "node-appwrite": "latest"
+  }
+}

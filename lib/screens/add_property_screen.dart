@@ -42,7 +42,7 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
   final _lngCtrl = TextEditingController();
 
   final _mapController = MapController();
-  static const _cochabambaCenter = LatLng(-17.39, -66.16);
+  static const _oruroCenter = LatLng(-17.972, -67.113);
   LatLng? _pinCoords;
 
   String? _canonicalAddress;
@@ -419,7 +419,7 @@ class _AddPropertyScreenState extends ConsumerState<AddPropertyScreen> {
                   FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
-                      initialCenter: _pinCoords ?? _cochabambaCenter,
+                      initialCenter: _pinCoords ?? _oruroCenter,
                       initialZoom: _pinCoords != null ? 16 : 13,
                       onTap: (_, point) => _onMapTap(point),
                       interactionOptions: const InteractionOptions(

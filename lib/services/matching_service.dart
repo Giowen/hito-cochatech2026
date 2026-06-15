@@ -68,7 +68,7 @@ class MatchingService {
 
   // ── System prompt v2 — score caps duros + labels claros ───────────────
   static const _systemPrompt = '''
-Eres un asistente experto en bienes raíces de Cochabamba, Bolivia.
+Eres un asistente experto en bienes raíces de Oruro, Bolivia.
 
 Evalúa qué tan bien una propiedad coincide con las preferencias del cliente.
 

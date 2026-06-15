@@ -1,5 +1,7 @@
+import 'package:appwrite/appwrite.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'utils/env.dart';
 import 'models/client_profile.dart';
 import 'models/lead.dart';
 import 'models/match_result.dart';
@@ -7,12 +9,15 @@ import 'models/property.dart';
 import 'models/contract_analysis.dart';
 import 'models/valuation_report.dart';
 import 'db/hito_db.dart';
-import 'repositories/drift_cached_supabase_repository.dart';
+import 'repositories/appwrite_contract_analysis_cache_repository.dart';
+import 'repositories/appwrite_match_cache_repository.dart';
+import 'repositories/appwrite_property_repository.dart';
+import 'repositories/appwrite_valuation_cache_repository.dart';
+import 'repositories/drift_cached_repository.dart';
 import 'repositories/contract_analysis_cache_repository.dart';
 import 'repositories/leads_repository.dart';
 import 'repositories/match_cache_repository.dart';
 import 'repositories/property_repository.dart';
-import 'repositories/supabase_property_repository.dart';
 import 'repositories/valuation_cache_repository.dart';
 import 'services/asset_storage.dart';
 import 'services/contract_analysis_service.dart';
@@ -23,6 +28,39 @@ import 'services/property_management_service.dart';
 import 'services/session_storage.dart';
 import 'services/valuation_service.dart';
 import 'services/voice_to_profile_service.dart';
+
+/// ───────────────────────────────────────────────────────────────────────
+/// Appwrite — cliente y servicios.
+///
+/// A diferencia de Supabase (singleton global vía `Supabase.initialize`), el
+/// SDK de Appwrite es un objeto `Client` que se construye y se inyecta en los
+/// servicios `Databases`/`Storage`. Lo exponemos como providers para que los
+/// repositorios lo reciban por DI.
+///
+/// `endpoint` y `projectId` son públicos (no secretos): el proyecto se autoriza
+/// por la plataforma registrada en la consola (hostname web / package Android),
+/// no por una API key embebida en el cliente.
+/// ───────────────────────────────────────────────────────────────────────
+final appwriteClientProvider = Provider<Client>((ref) {
+  return Client()
+      .setEndpoint(Env.require('APPWRITE_ENDPOINT'))
+      .setProject(Env.require('APPWRITE_PROJECT_ID'));
+});
+
+/// Servicio de base de datos (API clásica `Databases`: colecciones/documentos).
+final appwriteDatabasesProvider = Provider<Databases>(
+  (ref) => Databases(ref.watch(appwriteClientProvider)),
+);
+
+/// Servicio de Storage (bucket `property-images`).
+final appwriteStorageProvider = Provider<Storage>(
+  (ref) => Storage(ref.watch(appwriteClientProvider)),
+);
+
+/// ID lógico de la base de datos en Appwrite (de `.env` / --dart-define).
+final appwriteDatabaseIdProvider = Provider<String>(
+  (ref) => Env.require('APPWRITE_DATABASE_ID'),
+);
 
 /// Single instance del SessionStorage para los notifiers que persisten.
 final sessionStorageProvider = Provider<SessionStorage>(
@@ -193,10 +231,13 @@ final clientProfileProvider =
   ClientProfileNotifier.new,
 );
 
-/// Cache layer para AI scoring decisions (`match_scoring_cache` en Supabase).
+/// Cache layer para AI scoring decisions (`match_scoring_cache` en Appwrite).
 /// Real LLM siempre escribe aquí en cada miss; segundo load = hit instant.
 final matchCacheRepositoryProvider = Provider<MatchCacheRepository>(
-  (ref) => SupabaseMatchCacheRepository(),
+  (ref) => AppwriteMatchCacheRepository(
+    databases: ref.watch(appwriteDatabasesProvider),
+    databaseId: ref.watch(appwriteDatabaseIdProvider),
+  ),
 );
 
 /// MatchingService — real Groq Llama 3.3 con cache. Sin hardcoded shortcuts.
@@ -220,23 +261,26 @@ final hitoDbProvider = Provider<HitoDatabase?>((ref) {
 /// Repositorio de propiedades — multi-tier resilient.
 ///
 /// Read flow (Mobile con Drift):
-///   1. DriftCachedSupabaseRepository.getAll()
-///      → cache Drift hit: instantáneo + background refresh Supabase
-///      → cache miss: espera Supabase, cachea, retorna
-///      → Supabase falla + cache cold: throw
+///   1. DriftCachedRepository.getAll()
+///      → cache Drift hit: instantáneo + background refresh Appwrite
+///      → cache miss: espera Appwrite, cachea, retorna
+///      → Appwrite falla + cache cold: throw
 ///   2. FallbackPropertyRepository cacha throw → InMemory seed JSON
 ///
 /// Read flow (Web, sin Drift):
-///   1. SupabasePropertyRepository directo
+///   1. AppwritePropertyRepository directo
 ///   2. FallbackPropertyRepository cacha throw → InMemory seed JSON
 ///
 /// Resultado: demo funciona en todos los escenarios sin tocar UI.
 final propertyRepositoryProvider = Provider<PropertyRepository>((ref) {
-  final supabaseRepo = SupabasePropertyRepository();
+  final appwriteRepo = AppwritePropertyRepository(
+    databases: ref.watch(appwriteDatabasesProvider),
+    databaseId: ref.watch(appwriteDatabaseIdProvider),
+  );
   final db = ref.watch(hitoDbProvider);
   final PropertyRepository primary = db == null
-      ? supabaseRepo
-      : DriftCachedSupabaseRepository(remote: supabaseRepo, db: db);
+      ? appwriteRepo
+      : DriftCachedRepository(remote: appwriteRepo, db: db);
   return FallbackPropertyRepository(
     primary: primary,
     fallback: InMemoryPropertyRepository(),
@@ -257,10 +301,14 @@ final propertyManagementServiceProvider = Provider<PropertyManagementService>(
   ),
 );
 
-/// PropertyImageUploader — compresión client-side + upload a Supabase Storage
+/// PropertyImageUploader — compresión client-side + upload a Appwrite Storage
 /// (bucket `property-images`). Usado por add_property_screen.
 final propertyImageUploaderProvider = Provider<PropertyImageUploader>(
-  (ref) => PropertyImageUploader(),
+  (ref) => PropertyImageUploader(
+    storage: ref.watch(appwriteStorageProvider),
+    endpoint: Env.require('APPWRITE_ENDPOINT'),
+    projectId: Env.require('APPWRITE_PROJECT_ID'),
+  ),
 );
 
 /// VoiceToProfileService — Whisper (Groq) + LLM extraction. Convierte voz
@@ -324,11 +372,14 @@ final selectedPropertyIdProvider =
   SelectedPropertyIdNotifier.new,
 );
 
-/// Cache layer para valuaciones AI (`valuation_reports` en Supabase).
-/// Insert-only — cada nuevo cómputo es un row con timestamp; getLatest
+/// Cache layer para valuaciones AI (`valuation_reports` en Appwrite).
+/// Insert-only — cada nuevo cómputo es un documento con timestamp; getLatest
 /// retorna el más reciente.
 final valuationCacheRepositoryProvider = Provider<ValuationCacheRepository>(
-  (ref) => SupabaseValuationCacheRepository(),
+  (ref) => AppwriteValuationCacheRepository(
+    databases: ref.watch(appwriteDatabasesProvider),
+    databaseId: ref.watch(appwriteDatabaseIdProvider),
+  ),
 );
 
 /// ValuationService — Groq Llama 3.3 con comparables live de Supabase.
@@ -365,11 +416,14 @@ final activeValuationPropertyIdProvider =
   ActiveValuationPropertyIdNotifier.new,
 );
 
-/// Cache layer para análisis de contratos (`contract_analyses` Supabase).
+/// Cache layer para análisis de contratos (`contract_analyses` Appwrite).
 /// Keyed por (property_id, contract_type), insert-only.
 final contractAnalysisCacheRepositoryProvider =
     Provider<ContractAnalysisCacheRepository>(
-  (ref) => SupabaseContractAnalysisCacheRepository(),
+  (ref) => AppwriteContractAnalysisCacheRepository(
+    databases: ref.watch(appwriteDatabasesProvider),
+    databaseId: ref.watch(appwriteDatabaseIdProvider),
+  ),
 );
 
 /// ContractAnalysisService — real Groq Llama 3.3 con conocimiento del Código
