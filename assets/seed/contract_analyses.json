@@ -1,24 +1,24 @@
 {
   "_description": "Análisis pre-computados de los contratos de cada propiedad seed. Permiten que el Copiloto Legal abra instantáneamente (sin Groq, sin Supabase) para la demo y para uso real cuando el agente todavía no subió un contrato personalizado. Si el usuario sube un PDF custom, esos sí van al LLM.",
   "_schema": "key = '{property_id}:{contract_type}'. Falta una entry → service hace fallback a cache Supabase → LLM",
-  "p01:anticretico": {
+  "o01:anticretico": {
     "contract_type": "anticretico",
     "overall_risk_score": 78,
     "analyzed_clauses": [
       {
-        "clause_text": "CLÁUSULA PRIMERA. Identificación de las partes.\nComparecen Sr. Carlos Mendoza R., con CI 4.231.876 Cbba, mayor de edad, domiciliado en calle Aniceto Arce N° 421, en calidad de PROPIETARIO; y los esposos Juan García y Ana López, con CI 8.421.190 y 9.102.554 respectivamente, en calidad de ANTICRESISTAS.",
+        "clause_text": "CLÁUSULA PRIMERA. Identificación de las partes.\nComparecen Sr. Carlos Mendoza R., con CI 4.231.876 Oruro, mayor de edad, domiciliado en calle Bolívar N° 421, en calidad de PROPIETARIO; y los esposos Juan García y Ana López, con CI 8.421.190 y 9.102.554 respectivamente, en calidad de ANTICRESISTAS.",
         "risk_level": "low",
         "issue": "Identificación completa de todas las partes con CI y domicilio. Cumple CC art. 1429.",
         "suggestion": "Verificá CI vía SEGIP el día de la firma. Estándar."
       },
       {
-        "clause_text": "CLÁUSULA SEGUNDA. Objeto del contrato.\nEl propietario entrega a los anticresistas el inmueble ubicado en Av. Pando N° 1842, zona Cala Cala, Cochabamba, registrado en Derechos Reales bajo Folio Real 3.01.4.99.0034521, con superficie de terreno de 320 m² y construcción de 280 m².",
+        "clause_text": "CLÁUSULA SEGUNDA. Objeto del contrato.\nEl propietario entrega a los anticresistas el inmueble ubicado en Calle Pagador N° 1240, zona La Floresta, Oruro, registrado en Derechos Reales bajo Folio Real 4.01.1.99.0034521, con superficie de terreno de 320 m² y construcción de 280 m².",
         "risk_level": "low",
         "issue": "Identificación registral correcta del inmueble (folio + superficies).",
         "suggestion": "Verificá que el folio coincida con la certificación de DD.RR. actualizada."
       },
       {
-        "clause_text": "CLÁUSULA TERCERA. Monto del anticrético.\nEl monto total del anticrético es de Bs 320.000 (TRESCIENTOS VEINTE MIL BOLIVIANOS), que serán entregados en su totalidad al momento de la firma del presente contrato y consignación notarial.",
+        "clause_text": "CLÁUSULA TERCERA. Monto del anticrético.\nEl monto total del anticrético es de Bs 236.000 (DOSCIENTOS TREINTA Y SEIS MIL BOLIVIANOS), que serán entregados en su totalidad al momento de la firma del presente contrato y consignación notarial.",
         "risk_level": "low",
         "issue": "Monto expresado en BOB (CC art. 1431). Entrega contra firma con consignación notarial es práctica segura.",
         "suggestion": "Pedí recibo notarial separado al hacer la consignación."
@@ -32,7 +32,7 @@
       {
         "clause_text": "CLÁUSULA QUINTA. Gravámenes y libertad de cargas.\nEL PROPIETARIO declara bajo juramento que el inmueble se encuentra libre de todo gravamen, hipoteca, embargo o cualquier afectación que pudiera limitar el derecho del anticresista.",
         "risk_level": "high",
-        "issue": "DECLARACIÓN FALSA: el cruce con DD.RR. detectó una hipoteca activa con Banco BISA por $42,000 USD (Folio Real 3.01.4.99.0034521). Esta cláusula contradice el estado registral real.",
+        "issue": "DECLARACIÓN FALSA: el cruce con DD.RR. detectó una hipoteca activa con Banco BISA por $42,000 USD (Folio Real 4.01.1.99.0034521). Esta cláusula contradice el estado registral real.",
         "suggestion": "NO firmar hasta que el propietario presente la cancelación de hipoteca registrada en DD.RR. (no basta una carta del banco)."
       },
       {
@@ -42,7 +42,7 @@
         "suggestion": "Sin cambios. Hacé inventario fotográfico al momento de la entrega."
       },
       {
-        "clause_text": "CLÁUSULA SÉPTIMA. Devolución del monto.\nAl término del contrato el PROPIETARIO se compromete a devolver el monto total del anticrético dentro de los treinta (30) días siguientes, condicionado a la venta de otra propiedad de su titularidad ubicada en zona Sacaba.",
+        "clause_text": "CLÁUSULA SÉPTIMA. Devolución del monto.\nAl término del contrato el PROPIETARIO se compromete a devolver el monto total del anticrético dentro de los treinta (30) días siguientes, condicionado a la venta de otra propiedad de su titularidad ubicada en zona Challacollo.",
         "risk_level": "high",
         "issue": "Condicionar la devolución a la venta de OTRO inmueble es un patrón de fraude documental. El anticrético es un derecho real (CC art. 1435): la restitución no puede depender de eventos externos.",
         "suggestion": "Exigí eliminar la condición de venta. La devolución debe ser incondicional al vencimiento."
@@ -72,7 +72,7 @@
         "suggestion": "Sin cambios. Cláusula a favor de los anticresistas."
       },
       {
-        "clause_text": "CLÁUSULA DUODÉCIMA. Jurisdicción.\nPara cualquier controversia derivada del presente contrato, las partes se someten a la jurisdicción ordinaria de Cochabamba, renunciando expresamente a cualquier otro fuero.",
+        "clause_text": "CLÁUSULA DUODÉCIMA. Jurisdicción.\nPara cualquier controversia derivada del presente contrato, las partes se someten a la jurisdicción ordinaria de Oruro, renunciando expresamente a cualquier otro fuero.",
         "risk_level": "low",
         "issue": "Sumisión a jurisdicción local estándar.",
         "suggestion": "Sin cambios."
@@ -98,7 +98,7 @@
     ],
     "gravamen_check": {
       "status": "flagged",
-      "details": "Propiedad figura como garantía en hipoteca activa con Banco BISA por $42,000 USD. Folio Real 3.01.4.99.0034521. El contrato presentado declara la propiedad libre de gravámenes (Cláusula QUINTA) — declaración FALSA verificada en DD.RR. 2 horas atrás."
+      "details": "Propiedad figura como garantía en hipoteca activa con Banco BISA por $42,000 USD. Folio Real 4.01.1.99.0034521. El contrato presentado declara la propiedad libre de gravámenes (Cláusula QUINTA) — declaración FALSA verificada en DD.RR. 2 horas atrás."
     }
   },
   "_default:anticretico": {
