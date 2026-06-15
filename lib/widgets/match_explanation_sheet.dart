@@ -202,79 +202,103 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Cap a 85% del alto de pantalla: el contenido (foto hero + análisis +
+    // factores) puede superar el viewport. Sin esto, el Column crecía sin
+    // límite dentro del bottom sheet isScrollControlled y el botón quedaba
+    // fuera de pantalla, sin scroll para alcanzarlo.
+    final maxSheetHeight = MediaQuery.of(context).size.height * 0.85;
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxSheetHeight),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Header(property: property, score: match.compatibilityPercent),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Icon(Icons.auto_awesome, size: 14, color: HitoTokens.teal),
-                const SizedBox(width: 6),
-                Text(
-                  'AI análisis',
-                  style: GoogleFonts.geist(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: HitoTokens.teal2,
-                    letterSpacing: 0.6,
-                  ),
+            // Contenido scrollable. Flexible(loose) → el sheet se encoge al
+            // contenido cuando es chico, y scrollea cuando supera el cap.
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Header(
+                        property: property,
+                        score: match.compatibilityPercent),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Icon(Icons.auto_awesome,
+                            size: 14, color: HitoTokens.teal),
+                        const SizedBox(width: 6),
+                        Text(
+                          'AI análisis',
+                          style: GoogleFonts.geist(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: HitoTokens.teal2,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      constraints: const BoxConstraints(minHeight: 80),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: HitoTokens.paper2,
+                        borderRadius: BorderRadius.circular(HitoTokens.rLg),
+                        border: Border.all(color: HitoTokens.border),
+                      ),
+                      child: _StreamingText(
+                        text: streamedText,
+                        isStreaming: streaming,
+                      ),
+                    ),
+                    if (match.recommended.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _FactorSection(
+                        label: 'RECOMENDADO',
+                        icon: Icons.check_circle_rounded,
+                        color: HitoTokens.success,
+                        items: match.recommended,
+                      ),
+                    ],
+                    if (match.considerations.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _FactorSection(
+                        label: 'A TENER EN CUENTA',
+                        icon: Icons.info_outline_rounded,
+                        color: HitoTokens.warning,
+                        items: match.considerations,
+                      ),
+                    ],
+                    if (match.risks.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _FactorSection(
+                        label: 'RIESGO',
+                        icon: Icons.warning_amber_rounded,
+                        color: HitoTokens.danger,
+                        items: match.risks,
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              constraints: const BoxConstraints(minHeight: 80),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: HitoTokens.paper2,
-                borderRadius: BorderRadius.circular(HitoTokens.rLg),
-                border: Border.all(color: HitoTokens.border),
-              ),
-              child: _StreamingText(
-                text: streamedText,
-                isStreaming: streaming,
               ),
             ),
-            if (match.recommended.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _FactorSection(
-                label: 'RECOMENDADO',
-                icon: Icons.check_circle_rounded,
-                color: HitoTokens.success,
-                items: match.recommended,
-              ),
-            ],
-            if (match.considerations.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _FactorSection(
-                label: 'A TENER EN CUENTA',
-                icon: Icons.info_outline_rounded,
-                color: HitoTokens.warning,
-                items: match.considerations,
-              ),
-            ],
-            if (match.risks.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _FactorSection(
-                label: 'RIESGO',
-                icon: Icons.warning_amber_rounded,
-                color: HitoTokens.danger,
-                items: match.risks,
-              ),
-            ],
-            const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: onOpenValuation,
-              icon: const Icon(Icons.trending_up_rounded),
-              label: const Text('Ver valuación dinámica'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
+            // Botón fijo abajo — siempre visible y alcanzable.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              child: FilledButton.icon(
+                onPressed: onOpenValuation,
+                icon: const Icon(Icons.trending_up_rounded),
+                label: const Text('Ver valuación dinámica'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
               ),
             ),
           ],
