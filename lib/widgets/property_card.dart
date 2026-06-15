@@ -15,7 +15,10 @@ class _PropertyThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final photoUrl = property.photos.isNotEmpty ? property.photos.first : null;
-    if (photoUrl != null && photoUrl.startsWith('http')) {
+    final isHttp = photoUrl != null && photoUrl.startsWith('http');
+    final isAsset = photoUrl != null && photoUrl.startsWith('assets/');
+    if (isHttp || isAsset) {
+      final stub = _PhotoStub(image: property.image, type: property.type);
       return Container(
         width: 52,
         height: 52,
@@ -24,17 +27,22 @@ class _PropertyThumb extends StatelessWidget {
           color: HitoTokens.paper3,
           borderRadius: BorderRadius.circular(HitoTokens.rMd),
         ),
-        child: Image.network(
-          photoUrl,
-          fit: BoxFit.cover,
-          // Si falla la carga (offline, cors, etc), caemos al gradient stub.
-          errorBuilder: (_, __, ___) =>
-              _PhotoStub(image: property.image, type: property.type),
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-            return _PhotoStub(image: property.image, type: property.type);
-          },
-        ),
+        child: isAsset
+            ? Image.asset(
+                photoUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => stub,
+              )
+            : Image.network(
+                photoUrl,
+                fit: BoxFit.cover,
+                // Si falla la carga (offline, cors, etc), caemos al gradient stub.
+                errorBuilder: (_, __, ___) => stub,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return stub;
+                },
+              ),
       );
     }
     return _PhotoStub(image: property.image, type: property.type);

@@ -298,7 +298,9 @@ class _Header extends StatelessWidget {
         .join(' ');
     final photoUrl =
         property.photos.isNotEmpty ? property.photos.first : null;
-    final hasPhoto = photoUrl != null && photoUrl.startsWith('http');
+    final isAssetPhoto = photoUrl != null && photoUrl.startsWith('assets/');
+    final hasPhoto =
+        photoUrl != null && (photoUrl.startsWith('http') || isAssetPhoto);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -313,31 +315,44 @@ class _Header extends StatelessWidget {
               children: [
                 AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: Image.network(
-                    photoUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: HitoTokens.paper3,
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        size: 48,
-                        color: HitoTokens.ink4,
-                      ),
-                    ),
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-                      return Container(
-                        color: HitoTokens.paper3,
-                        alignment: Alignment.center,
-                        child: const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child:
-                              CircularProgressIndicator(strokeWidth: 2),
+                  child: isAssetPhoto
+                      ? Image.asset(
+                          photoUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: HitoTokens.paper3,
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              size: 48,
+                              color: HitoTokens.ink4,
+                            ),
+                          ),
+                        )
+                      : Image.network(
+                          photoUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: HitoTokens.paper3,
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              size: 48,
+                              color: HitoTokens.ink4,
+                            ),
+                          ),
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return Container(
+                              color: HitoTokens.paper3,
+                              alignment: Alignment.center,
+                              child: const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
                 // Gradient sutil abajo para legibilidad del badge.
                 Positioned(

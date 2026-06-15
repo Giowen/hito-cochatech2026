@@ -87,6 +87,7 @@ flutter:
     # Dev local: copia .env al working dir; main.dart hace try/catch al cargar.
     # Producción: build con `flutter build web --dart-define-from-file=env.json`
     - assets/seed/
+    - assets/properties/
 
   # Custom fonts. Gullia es el display font (titulares editoriales) —
   # reemplaza InstrumentSerif vía google_fonts. Cross-platform Web/Android/
