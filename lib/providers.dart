@@ -186,40 +186,23 @@ final shareLinkOriginProvider =
   ShareLinkOriginNotifier.new,
 );
 
-/// Notifier para el profile del cliente activo. Default null al cold start;
-/// se hidrata desde `SessionStorage` en `build()` si el usuario tenía un
-/// profile previo (último voice query persistido).
+/// Notifier para el profile del cliente activo.
 ///
-/// Mantiene la experiencia: usuario reload → no pierde su búsqueda. Si quieres
-/// resetear, hay `clear()` que también borra el persisted.
+/// Cold start SIEMPRE arranca en null → la UI muestra el micrófono / estado
+/// "¿qué buscas?" en cada carga, en vez de restaurar el último query (lo que
+/// confundía: aparecía el prompt anterior escrito en lugar del micrófono).
+/// Dentro de la sesión, `update` persiste por si otra parte de la app lo lee,
+/// pero el reload empieza limpio.
 class ClientProfileNotifier extends Notifier<ClientProfile?> {
-  /// Flag para evitar que la hidratación async sobrescriba un valor que el
-  /// usuario ya seteó explícitamente vía update/clear (race condition real:
-  /// el primer build devuelve null sincrónico, el _hydrate corre async y
-  /// puede completar DESPUÉS de que el user ya hizo voice query — antes
-  /// pisábamos el profile recién creado).
-  bool _userTouched = false;
-
   @override
-  ClientProfile? build() {
-    _hydrate();
-    return null;
-  }
-
-  Future<void> _hydrate() async {
-    final loaded = await ref.read(sessionStorageProvider).getClientProfile();
-    if (_userTouched) return; // el user ya tocó, no piso su selección
-    if (loaded != null) state = loaded;
-  }
+  ClientProfile? build() => null;
 
   void update(ClientProfile profile) {
-    _userTouched = true;
     state = profile;
     ref.read(sessionStorageProvider).setClientProfile(profile);
   }
 
   void clear() {
-    _userTouched = true;
     state = null;
     ref.read(sessionStorageProvider).setClientProfile(null);
   }
